@@ -24,13 +24,16 @@ rusqlite = { version = "0.40", features = ["bundled"] }
 # B3 - pin only; no Keyhive object is created in Phase 0 (L-4, L-12)
 keyhive_core = "=0.5.0"
 # B4 - declared; one DID->PDS resolve (no writes)
+# TLS: rustls, not native-tls (Run 13 defect 4: native-tls -> openssl-sys has no aarch64-linux-android
+# sysroot). webpki roots for Phase 0; platform verifier is a Phase 1 pre-decision.
 atrium-api         = "0.25"
-atrium-oauth       = "0.1"
+atrium-oauth       = { version = "0.1", default-features = false, features = ["reqwest"] }
 atrium-identity    = "0.1"
 atrium-repo        = "0.1"
 atrium-crypto      = "0.1"
 atrium-common      = "0.1"
-atrium-xrpc-client = "0.5"
+atrium-xrpc-client = { version = "0.5", default-features = false, features = ["reqwest"] }
+reqwest            = { version = "0.12", default-features = false, features = ["rustls-tls", "gzip"] }
 # B5 - Subduction git workspace, rev pinned 2026-09-20 (S-10)
 subduction_keyhive = { git = "https://github.com/inkandswitch/subduction", rev = "21b2e6b8", optional = true }
 subduction_iroh    = { git = "https://github.com/inkandswitch/subduction", rev = "21b2e6b8", optional = true }
