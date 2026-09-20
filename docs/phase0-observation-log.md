@@ -438,3 +438,41 @@ l14_note:            n/a
 loe_note:            B9 and B10 filed as docs/bedrock-common-nix-read.md (34 lines) and docs/did-plc-route-oi-m4.md (31 lines), overwriting the repo-creation stubs at those paths (A-O35). Sources read harness-side from the container via codeload tarballs (connector declared at the Unit 6 midpoint: egress to github.com / api.github.com / codeload / raw, reads only, A-O34); GitHub API rate-limited on the shared IP after 3 calls, as plan §3 predicted — tarballs unaffected. B9 (inkandswitch/bedrock main, updated 2026-09-08, sha not taken ~): hosted default is Caddy TLS -> Subduction WS on localhost:8080, auth="open", first-boot 32-byte key seed as host identity, redb + resident-tree cache, memory caps from incidents, and Caddy access logs designed to join peer ID to client IP for 14 days -- the metadata-custody point the Phase 1 self-host decision turns on; staging host (4 GB) is the minimum-viable self-host shape; transport is WS not QUIC (L-5 fallback role). B10 (did-method-plc main, pushed 2026-09-01, spec v0.1): verificationMethods accept any did:key type with no DID control, each change is a rotation-key-signed PLC op with a 72 h window and a permanent public log; the Keyhive doc ID cannot be a verification method; ROUTE NAMED = record route (social.localfirst.identity under OAuth); OI-M4 CLOSES with the verification-method route verified-available-and-declined; residue (post-T4 DID-side key commitment, Phase 4b) queued for the spec v0.1.5 cut list. started_at is the first fetch, ~ (not captured by date -u). No harness defects. Unit 6 fully closed: B9, B10, B12 both platforms.
 next:                Unit 6 close block + downloadable handoff. Unit 7 next session: sentinel-check re-run (A-O3, Run 0 now ~6 h old), exit check vs plan §0 verbatim, LOE packet (§5) from log fields, L-14 delta with both platforms' numbers, close handoff + LOE packet downloadable.
 ```
+
+```
+run:                 23
+run_type:            sentinel-check
+platform:            n/a
+started_at:          2026-09-20T21:21:54.809Z
+ended_at:            2026-09-20T21:22:31.804Z
+elapsed_min:         1
+clean_checkout:      n/a
+commit:              ed47363
+pins:                n/a
+outcome:             pass
+defects:             0
+defect_classes:      n/a
+sentinel_state:      S-1=0.5.0 S-2=0.5.0@90fe4a51(main,2026-09-17) S-3=#230 open/DRAFT/unmerged(33 commits, head keyline_crate, updated 2026-09-14) S-4=kh0 S-5="0.5" | S-6=null(operator, before Phase 2) S-7=SyncpointMap pub(crate)@21b2e6b8 and @main S-8=samod 0.14.0/autosurgeon 0.14.0 S-9=api 0.25.8/oauth 0.1.7/identity 0.1.9 S-10=git-only, subduction_iroh 0.10.2, subduction_keyhive 0.8.2, workspace automerge 0.11.0 S-11=null(operator ruling: own repos, nothing beyond this session's work) S-12(a)=null(root + keyhive_core CHANGELOG 404; #keyhive not read) S-12(b)=branch `2026-sept-updates` EXISTS (head 881226c9, 2026-09-08), NOT merged (lib.rs 4-line diff, Cargo.toml 49-line diff vs main)
+l14_note:            n/a
+loe_note:            Unit 7 exit sentinel re-run, harness-side from the container (egress to github.com/raw/codeload + crates.io declared, A-O41; reads only). Every S-1..S-5, S-7..S-10, S-12 value identical to Run 0 (~6 h 14 min earlier): NO TRIGGER MOVED. GitHub API rate-limited after one call (S-3) as plan §3 predicted; raw/atom/HTML reads used for the rest (✓). 1ec1669d seen in the HTML commit list is the #227 PR head, not a new main commit (title-read ✓). S-12(b) stands → Phase 1 does not open before a T4 scoping ruling.
+next:                Run 24 — exit check vs plan §0; LOE packet
+```
+
+```
+run:                 24
+run_type:            exit-check
+platform:            n/a
+started_at:          2026-09-20T21:23:31.697Z
+ended_at:            2026-09-20T21:37:31.000Z
+elapsed_min:         14
+clean_checkout:      n/a
+commit:              ed47363
+pins:                keyhive_core=0.5.0 samod=0.14.0 autosurgeon=0.14.0 subduction=21b2e6b8 atrium-api=0.25.8 reqwest=0.12.28(rustls-tls) uniffi=0.32.1
+outcome:             pass
+defects:             0
+defect_classes:      n/a
+sentinel_state:      (as Run 23)
+l14_note:            L-14 quantified (LOE packet §4): run wall-clock to round-trip Android 36 min vs iOS 38 min active (≈1:1); repo defects 4:1 (Run 13 vs Run 18, all build-system/dependency, all fixed in-run); toolchain install ~45 vs ~6 min (~, ≈7.5:1); OAuth smoke 1:1. UniFFI Kotlin output from the keyhive_core-bearing workspace CONFIRMED on host, cross-compiled, loaded on device (Runs 9/13/14). Android side measured on emulator (D-8); device-level Android friction unmeasured.
+loe_note:            Exit criterion (plan §0 verbatim: "Hello-world with an Automerge doc round-tripping through the core on a device") MET on iOS (Run 18, physical) and on Android (Run 14, emulator under D-8); both saves 159 bytes. B1-B12 all met. Phase 0 total ~6.3 h governed wall-clock (Run 0 start → this entry), ~51 min toolchain installs outside runs, 24 runs, 5 repo defects, 12 harness defects. LOE packet filed as docs/phase0-loe-packet_2026-09-20.md (plan §5 fields; estimate section ~). Phase 0 closes on the same upstream sentinel state it opened on. Log residue noted, not edited: Run 10 blank block; Run 12 timestamps unfilled.
+next:                Phase 1 plan — not before the T4 scoping ruling (S-12(b)); physical Android device first Phase 1 item; spec v0.1.5 Lightweight cut; SL-0241 / B11 / L-14 deltas append in order, VERIFY tail.
+```
