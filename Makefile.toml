@@ -1,6 +1,9 @@
 # cargo-make tasks — modeled on iroh-ffi (swift-xcframework, bindgen-kotlin). Phase 0 build plan §2 B6.
 # Host tasks were run in the Phase 0 build container. Device tasks are declared; they run on the operator's machine
 # (Xcode / NDK are not present in the container). Run: `cargo make <task>` from the repo root.
+# Run 13 (2026-09-20): device tasks cd into ${CORE_DIR} — cargo-ndk and uniffi-bindgen run `cargo metadata`
+# in the cwd before honouring --manifest-path; bindgen-kotlin reads the Android arm64 .so (host cdylib is
+# .dylib on macOS, .so on Linux).
 [config]
 default_to_workspace = false
 
@@ -23,26 +26,32 @@ description = "Host: B5 — confirm the Subduction git workspace compiles into t
 command = "cargo"
 args = ["build", "--manifest-path", "${CORE_DIR}/Cargo.toml", "-p", "${LIB}", "--features", "subduction"]
 
-[tasks.bindgen-kotlin]
-description = "Android: generate Kotlin bindings from the cdylib (uniffi 0.32 proc-macro mode; library mode)."
-script = '''
-cargo build --manifest-path ${CORE_DIR}/Cargo.toml -p ${LIB} --release
-cargo run --manifest-path ${CORE_DIR}/Cargo.toml -p uniffi-bindgen -- generate \
-  --library ${CORE_DIR}/target/release/lib${LIB}.so --language kotlin --out-dir bindings/kotlin/generated
-'''
-
 [tasks.android-so]
 description = "Android: cross-compile cdylib for arm64 + x86_64 (requires cargo-ndk + NDK)."
 script = '''
-cargo ndk -t arm64-v8a -t x86_64 -o bindings/kotlin/jniLibs build --manifest-path ${CORE_DIR}/Cargo.toml -p ${LIB} --release
+set -e
+cd "${CORE_DIR}"
+cargo ndk -t arm64-v8a -t x86_64 -o ../bindings/kotlin/jniLibs build -p "${LIB}" --release
+'''
+
+[tasks.bindgen-kotlin]
+description = "Android: generate Kotlin bindings from the arm64 Android cdylib (uniffi 0.32 proc-macro mode; library mode)."
+dependencies = ["android-so"]
+script = '''
+set -e
+cd "${CORE_DIR}"
+cargo run -p uniffi-bindgen -- generate \
+  --library ../bindings/kotlin/jniLibs/arm64-v8a/lib${LIB}.so --language kotlin --out-dir ../bindings/kotlin/generated
 '''
 
 [tasks.swift-xcframework]
 description = "iOS: staticlib for device + simulator, Swift bindings, xcframework (requires Xcode; run on macOS)."
 script = '''
-cargo build --manifest-path ${CORE_DIR}/Cargo.toml -p ${LIB} --release --target aarch64-apple-ios
-cargo build --manifest-path ${CORE_DIR}/Cargo.toml -p ${LIB} --release --target aarch64-apple-ios-sim
-cargo run --manifest-path ${CORE_DIR}/Cargo.toml -p uniffi-bindgen -- generate \
-  --library ${CORE_DIR}/target/aarch64-apple-ios/release/lib${LIB}.a --language swift --out-dir bindings/swift/generated
+set -e
+cd "${CORE_DIR}"
+cargo build -p "${LIB}" --release --target aarch64-apple-ios
+cargo build -p "${LIB}" --release --target aarch64-apple-ios-sim
+cargo run -p uniffi-bindgen -- generate \
+  --library target/aarch64-apple-ios/release/lib${LIB}.a --language swift --out-dir ../bindings/swift/generated
 # xcodebuild -create-xcframework … (fill in from automerge-swift precedent on first iOS run; log as binding-build)
 '''
