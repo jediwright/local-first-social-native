@@ -21,3 +21,4 @@ apps/ios/**/.build/
 
 # macOS
 .DS_Store
+bindings/swift/include/

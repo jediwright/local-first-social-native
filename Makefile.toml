@@ -53,5 +53,12 @@ cargo build -p "${LIB}" --release --target aarch64-apple-ios
 cargo build -p "${LIB}" --release --target aarch64-apple-ios-sim
 cargo run -p uniffi-bindgen -- generate \
   --library target/aarch64-apple-ios/release/lib${LIB}.a --language swift --out-dir ../bindings/swift/generated
-# xcodebuild -create-xcframework … (fill in from automerge-swift precedent on first iOS run; log as binding-build)
+rm -rf ../bindings/swift/include ../bindings/swift/lfs_coreFFI.xcframework
+mkdir -p ../bindings/swift/include
+cp ../bindings/swift/generated/lfs_coreFFI.h ../bindings/swift/include/lfs_coreFFI.h
+cp ../bindings/swift/generated/lfs_coreFFI.modulemap ../bindings/swift/include/module.modulemap
+xcodebuild -create-xcframework \
+  -library target/aarch64-apple-ios/release/lib${LIB}.a -headers ../bindings/swift/include \
+  -library target/aarch64-apple-ios-sim/release/lib${LIB}.a -headers ../bindings/swift/include \
+  -output ../bindings/swift/lfs_coreFFI.xcframework
 '''
