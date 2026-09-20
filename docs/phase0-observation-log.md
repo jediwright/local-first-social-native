@@ -219,3 +219,20 @@ next:
 ---
 
 *Append-only. Canonical copy: operator's machine → `docs/` in `jediwright/local-first-social-native` at first commit.*
+
+run:                 11
+run_type:            note
+platform:            n/a
+started_at:          2026-09-20T16:06:43.000Z
+ended_at:            2026-09-20T16:40:00.000Z
+elapsed_min:         34
+clean_checkout:      false
+commit:              da8ca7e
+pins:                keyhive_core=0.5.0 samod=0.14.0 autosurgeon=0.14.0 subduction=21b2e6b8 atrium-api=0.25.8
+outcome:             pass
+defects:             1
+defect_classes:      other
+sentinel_state:      n/a
+l14_note:            n/a
+loe_note:            First commit and push to jediwright/local-first-social-native over HTTPS (D-1 discharged). Runs 0-9 `commit: null` -> da8ca7e by this note; prior entries not edited (D-4 discharged). Root commit amended pre-push to extend .gitignore with Android/iOS shell exclusions (5eb7f4b -> da8ca7e). Defect: harness extraction instruction omitted the ~/Downloads path; git init briefly created ~/.git in the home directory, removed before any add/commit; nothing outside the project tree was touched. SSH auth absent on this machine; HTTPS matches the other track repos. Operator-time cost ~20 min.
+next:                cargo make test; cargo make test-network (Run 12, network-probe, host)
