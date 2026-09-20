@@ -400,3 +400,22 @@ l14_note:            B12 on iOS, physical iPhone 17 Pro (UDID [UDID redacted 202
 loe_note:            Run 20 wall-clock 6 min (C0 20:50:22Z -> commit 20:56:15Z) including ContentView read, one new 43-line file, three perl inserts (94 lines, verified), device build + run, three screenshots. Pages setup before the run (page commit 61905d5 + Settings > Pages + deploy + curl 200) ~5 min, operator-side, not in run wall-clock. Harness defects: 0. Operator-side stop: none on the device path; one harness-instruction clarification (cmd-R is Xcode on the Mac, not the phone) ~1 min, class other, no repo effect. iOS OAuth path needed zero workarounds -> LOE packet "OAuth-path readiness" iOS row: none.
 next:                Run 21 -- oauth-smoke (android) on emulator-5554 (R-P0-15): Custom Tabs / ACTION_VIEW to the same placeholder, <intent-filter> for lfs://oauth/callback in AndroidManifest, status line on redirect. Check emulator state first.
 ```
+
+```
+run:                 21
+run_type:            oauth-smoke
+platform:            android
+started_at:          2026-09-20T20:57:44.000Z
+ended_at:            2026-09-20T21:03:38.000Z
+elapsed_min:         6
+clean_checkout:      false
+commit:              4fb5eff
+pins:                keyhive_core=0.5.0 samod=0.14.0 autosurgeon=0.14.0 subduction=21b2e6b8 atrium-api=0.25.8 reqwest=0.12.28(rustls-tls) uniffi=0.32.1 jna=5.17.0 kotlinx-coroutines=1.10.2 agp=9.4.1 kotlin=2.2.10 compileSdk=37 minSdk=24 jbr=25.0.3 emulator=Pixel_9(AVD)-17 placeholder=https://jediwright.github.io/local-first-social-native/phase0/oauth.html@61905d5
+outcome:             pass
+defects:             0
+defect_classes:      n/a
+sentinel_state:      n/a
+l14_note:            B12 on Android, emulator-5554 (Pixel_9 AVD, Android 17 image; R-P0-15 under D-8; emulator-5562 stale/offline entry present, every adb call pinned -s emulator-5554): OAuth tap -> Intent.ACTION_VIEW(OAUTH_PLACEHOLDER) opened Chrome -> placeholder page -> Continue to app (href lfs://oauth/callback?code=phase0) -> manifest <intent-filter> (VIEW, DEFAULT, BROWSABLE, scheme=lfs host=oauth path=/callback) + android:launchMode="singleTask" routed back via onNewIntent -> status "oauth-smoke ok in 51026 ms: lfs://oauth/callback?code=phase0 code=phase0". The 51 s is two Chrome first-run cards (Make Chrome your own -> Stay signed out; notifications -> No thanks) plus taps on a fresh AVD -- emulator environment, not latency, not a defect; a physical device with Chrome set up would not hit it. No "Open with" chooser fired. ACTION_VIEW chosen over Custom Tabs for the smoke (no androidx.browser dependency / catalog edit; same external user-agent per RFC 8252); Custom Tabs is Phase 2 wiring with atrium-oauth. Predicted P-1 (onNewIntent nullability) did not fire: override fun onNewIntent(intent: Intent) compiled on compileSdk 37. Predicted P-2 (no browser on image) did not fire; startActivity wrapped for ActivityNotFoundException regardless. Launch showed text=13 chars (B8 re-confirmed; Android's own lowercase save). Gradle installDebug 8 s incremental; first am start hit the pre-install instance ("intent delivered to currently running top-most instance") -> force-stop + restart before tapping (~30 s, class other, not a defect). Repo defects: 0. Host-env defects: 0. Evidence: docs/evidence/run21/run21-callback.png (adb screencap 17:03 local). B12 done-when now met on BOTH platforms.
+loe_note:            Run 21 wall-clock 6 min (C0 20:57:44Z -> commit 21:03:38Z): manifest 2-substitution perl edit, MainActivity.kt full-file rewrite (157 lines; harness estimate said 152 -- miss logged as a note, heredoc governs), Gradle install, force-stop/restart, two Chrome first-run dismissals, callback, screencap. iOS Run 20 was also 6 min -> the OAuth-path smoke shows no L-14 asymmetry at all; the asymmetry lives in binding-build and shell-run (Runs 13/14 vs 17/18). Harness defects: 0. LOE packet "OAuth-path readiness" Android row: no workarounds; one environment note (Chrome first-run on fresh AVDs). Unit 6 build items closed (B12 both); B9 and B10 notes remain.
+next:                B9 Bedrock common.nix fork-read note and B10 did:plc verification-method route note (docs/); harness-side reads need container egress or operator pastes. Then Unit 7: sentinel-check re-run (A-O3), exit check vs plan §0, LOE packet, L-14 delta, close.
+```
