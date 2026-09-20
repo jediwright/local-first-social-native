@@ -304,3 +304,23 @@ sentinel_state:      n/a
 l14_note:            emulator-5554 (AVD Pixel_9, sdk_gphone16k_arm64, arm64-v8a) re-verified BOOTED at open; D-8 stands. B4 on device pass: resolvePds(did:plc:z72i7hdynmk6r22z27h6tvur) -> "resolvePds ok in 1477 ms: https://puffball.us-east.host.bsky.network" (cold, first tap after launch); second tap 1241 ms, same PDS. rustls + webpki-roots + tokio via JNA resolved DID -> DID doc -> PDS from the emulator first try; no CoreException, so no finding lands on Phase 1 pre-decision (vi). Cold-warm gap ~240 ms -> cost is network round-trips, not runtime/TLS setup (note, not a finding). Generated signature verified before drafting: fun resolvePds(did: String): String, @Throws(CoreException::class), blocking -- call runs on a named background Thread, result posted via runOnUiThread. C4a: wizard manifest lacked INTERNET; added ahead of <application> (guaranteed first failure otherwise). C4b: MainActivity.kt 116 lines. C5: :app:assembleDebug BUILD SUCCESSFUL in 2s (18:02:53Z-18:02:56Z, warm daemon, config cache reused). Install -r 18:03:19Z, prior lfs.sqlite survived -> relaunch showed text=13 chars (B8 re-confirmed for free). Probe DID: the bsky.app fallback (A-O16) -- R15-0 grep of core/src + core/tests found no DID literal although the host test is named resolve_known_did_to_pds; host DID not identified, no action. Evidence: docs/evidence/run15/run15-resolve-ok.png (18:05:52Z). Repo defects: 0. Host-env defects: 0.
 loe_note:            Run 15 wall-clock 5 min from C4a apply to host re-verify done. Host cargo make test-network under rustls re-run: resolve_known_did_to_pds ok, 0.55s test / 11.0s cargo-make (18:06:44Z-18:06:55Z) -- item carried since 8dc6dab CLOSED. Host 0.55s vs device 1.24s warm / 1.48s cold. Harness defects: H-7 bare `adb` in the open block, command not found in a fresh shell (~1 min; rule: full platform-tools path on every adb block, same class as JAVA_HOME); draft defect caught pre-apply: handoff's C4a used `sed -i ''` with \n in the replacement, which BSD sed writes literally -- swapped to perl -pi, no repo effect. Note: main is ahead of origin/main by 5 (now 6) Phase 0 commits, unpushed; not a plan requirement. Emulator left running.
 next:                G13 checkpoint (Unit 4 closed: Runs 13-15). Then Unit 5 -- iOS: read MeetingNotes first and log the read; Units 6-7 per the 09-20 build handoff section 7.
+```
+
+```
+run:                 16
+run_type:            note
+platform:            ios
+started_at:          2026-09-20T18:30:58.615Z
+ended_at:            2026-09-20T18:31:14.712Z
+elapsed_min:         1
+clean_checkout:      n/a
+commit:              n/a
+pins:                n/a
+outcome:             pass
+defects:             0
+defect_classes:      n/a
+sentinel_state:      n/a
+l14_note:            n/a
+loe_note:            MeetingNotes read (plan B7 / spec §5.1, sweep F-6 Action 3): harness source-read of automerge/MeetingNotes via codeload tarball of main (ref ~, no sha in tarball; A-O18: not a repo file, upstream reference app). Findings: (M-1) document-based app (DocumentGroup + ReferenceFileDocument, CBOR-wrapped Automerge bytes + DocumentId via Files) -- B7 does NOT copy this; B7 = one screen over UniFFI with core-owned SQLite, parity with the B8 Compose shell so L-14 is measured like-for-like. (M-2) sync via AutomergeRepo WebSocket + PeerToPeer (Bonjour _automergesync._tcp) -- out of Phase 0. (M-3) no BackgroundTasks, no Keychain/Secure Enclave in the reference; spec §5.1 iOS-row prescriptions do not derive from it (~, OI-P0-3 candidate note; no Phase 0 effect). (M-4) packaging precedent = SPM package wrapping a binary xcframework (automerge-swift upToNextMajor 0.5.8), iOS 16.4 / Swift 5.0, CI on xcodebuild -destination 'platform=iOS Simulator' -- confirms plan B6 bindings/swift layout; B7 deployment target set at iOS 17. Host-env at Unit 5 open: Xcode NOT INSTALLED (xcode-select -p = CommandLineTools; no /Applications/Xcode*.app; mdfind empty) -- install is Run 17's toolchain cost. Physical iPhone 17 Pro available (operator ruling); no D-9 needed. Harness defects: H-8 (zsh nomatch glob in a read-only block, no effect); H-10 (Run 15 entry committed at 96220b7 without its closing code fence -- repaired by this append's leading fence, prior entry text untouched).
+next:                Run 17 -- binding-build (ios): Xcode install + xcode-select + iOS platform; rustup aarch64-apple-ios + aarch64-apple-ios-sim; cargo make swift-xcframework; uniffi Swift bindgen; Package.swift.
+```
