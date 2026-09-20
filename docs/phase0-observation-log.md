@@ -381,3 +381,22 @@ l14_note:            B4 on device, iOS, physical iPhone 17 Pro (UDID [UDID redac
 loe_note:            Run 19 wall-clock 9 min (C1 apply 20:15:12Z -> commit 20:24:31Z), including the three taps and four screenshots; Xcode incremental build seconds. Makefile fix + rebuild before this run (own commit e6582d8): first cargo make swift-xcframework after the env change 47.2s (20:11:10Z-20:11:57Z; ring/sqlite/rustls chain recompiled), second after blake3 clean 20.2s. ContentView.swift 91 lines (harness estimate said 90). No harness defects this run. iOS Unit 5 complete: Runs 16-19, 1 repo defect total (warning-only, fixed same session) vs Android Unit 4 Runs 13-15, 5 repo defects; L-14 delta drafted at Unit 7 with both platforms' numbers.
 next:                G13 checkpoint (Unit 5 closed: Runs 16-19). Then Unit 6 -- B12 OAuth-path smoke on both shells (Runs 20-21, oauth-smoke), B9 Bedrock common.nix note, B10 did:plc route note; Unit 7 exit check + LOE packet + close.
 ```
+
+```
+run:                 20
+run_type:            oauth-smoke
+platform:            ios
+started_at:          2026-09-20T20:50:22.000Z
+ended_at:            2026-09-20T20:56:15.000Z
+elapsed_min:         6
+clean_checkout:      false
+commit:              8070059
+pins:                keyhive_core=0.5.0 samod=0.14.0 autosurgeon=0.14.0 subduction=21b2e6b8 atrium-api=0.25.8 reqwest=0.12.28(rustls-tls) rustls=0.23.45 uniffi=0.32.1 rusqlite=0.40.2 blake3=1.8.7 xcode=27.0(27A266a) ios-sdk=27.0 swift-tools=5.9 swift-version=5.0 rustc=1.98.1 deployment-target=17.6 iphoneos-deployment-target=17.0 device-ios=26.6.1 placeholder=https://jediwright.github.io/local-first-social-native/phase0/oauth.html@61905d5
+outcome:             pass
+defects:             0
+defect_classes:      n/a
+sentinel_state:      n/a
+l14_note:            B12 on iOS, physical iPhone 17 Pro (UDID [UDID redacted 2026-09-20, R-P0-17], iOS 26.6.1, Wi-Fi): OAuth tap -> ASWebAuthenticationSession(url: placeholder, callback: .customScheme("lfs")) presented the GitHub Pages placeholder in the system sheet (jediwright.github.io) -> Continue to app (href lfs://oauth/callback?code=phase0) -> sheet dismissed -> status "oauth-smoke ok in 8411 ms: lfs://oauth/callback?code=phase0 code=phase0". The 8411 ms is tap-to-tap human time inside the sheet, not a latency figure. No CFBundleURLTypes / Info.plist edit: ASWebAuthenticationSession intercepts its own callback scheme (assumption held; scheme registration proper is Phase 2). prefersEphemeralWebBrowserSession=true: no "wants to use github.io to sign in" consent sheet fired (a choice, not a workaround; Phase 2 decides ephemeral vs shared cookie jar). Predicted P-2 (new file not in target) did not fire: Xcode 27 synchronized folder picked up OAuthSmoke.swift unadded. Placeholder page is tap-to-continue, not auto-redirect, so the same page serves Android Custom Tabs (user-gesture requirement). Launch showed text=13 chars (B7 re-confirmed). Xcode warning count not read this run (null). Repo defects: 0. Host-env defects: 0. Rulings at Unit 6 open: R-P0-15 B12 Android side = emulator-5554 under D-8; R-P0-16 placeholder = GitHub Pages from main:/docs (public repo; docs/phase0/oauth.html, commit 61905d5; push also caught origin up from 3c81b22). A-O26 RESOLVED: SWIFT_VERSION = 5.0 both configs (Swift 5 language mode; explains P-1 never firing in Run 19). Evidence: docs/evidence/run20/{run20-launch,run20-placeholder-sheet,run20-callback}.png (16:53/16:54/16:54 local, AirDropped).
+loe_note:            Run 20 wall-clock 6 min (C0 20:50:22Z -> commit 20:56:15Z) including ContentView read, one new 43-line file, three perl inserts (94 lines, verified), device build + run, three screenshots. Pages setup before the run (page commit 61905d5 + Settings > Pages + deploy + curl 200) ~5 min, operator-side, not in run wall-clock. Harness defects: 0. Operator-side stop: none on the device path; one harness-instruction clarification (cmd-R is Xcode on the Mac, not the phone) ~1 min, class other, no repo effect. iOS OAuth path needed zero workarounds -> LOE packet "OAuth-path readiness" iOS row: none.
+next:                Run 21 -- oauth-smoke (android) on emulator-5554 (R-P0-15): Custom Tabs / ACTION_VIEW to the same placeholder, <intent-filter> for lfs://oauth/callback in AndroidManifest, status line on redirect. Check emulator state first.
+```
