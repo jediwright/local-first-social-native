@@ -253,3 +253,20 @@ sentinel_state:      n/a
 l14_note:            n/a
 loe_note:            Fresh macOS toolchain (aarch64-apple-darwin): rustup stable rustc 1.98.1 (2026-09-01) + cargo-make 0.37.24 (1m31s). Build session ran on Ubuntu-packaged rustc 1.91.1 (D-3); both above the 1.90.0 floor. Host re-ground: lfs_core 4 passed / 1 ignored, first pass, 39s with --all-features (Subduction included) vs 4m51s in the Linux container. B4 live DID->PDS resolve passes twice: direct cargo test from core/ (0.32s) and canonical `cargo make test-network` from root (0.22s; 16.5s rebuild without the subduction feature) -- D-2 closed; first real network result across atrium-identity + tokio on host. Defect: harness instruction ran cargo make from core/; cargo-make fell back to built-in workspace recursion and the root Makefile.toml (which already guards with default_to_workspace=false and says "run from repo root") was never read. No build-system change. B4 on device is Run 15 (Android) and Unit 5 (iOS).
 next:                Unit 4 -- rustup target add x86_64-linux-android aarch64-linux-android; cargo install cargo-ndk; AVD (Google Play, x86_64); Run 13 binding-build
+
+run:                 13
+run_type:            binding-build
+platform:            android
+started_at:          2026-09-20T16:50:58.000Z
+ended_at:            2026-09-20T17:07:04.000Z
+elapsed_min:         16
+clean_checkout:      false
+commit:              8dc6dab
+pins:                keyhive_core=0.5.0 samod=0.14.0 autosurgeon=0.14.0 subduction=21b2e6b8 atrium-api=0.25.8 reqwest=0.12.28(rustls-tls) rustls=0.23.45 uniffi=0.32.1 cargo-ndk=4.1.2 ndk=30.0.16248370
+outcome:             pass
+defects:             4
+defect_classes:      other, dependency
+sentinel_state:      n/a
+l14_note:            emulator arm64-v8a (Apple-silicon host; D-8 -- R15's x86_64 premise inverted: arm64 is the run target, x86_64 compiled/unrun). Defects 1-3 (class other, build-system; fixed 6cfee9e): android-so and bindgen-kotlin ran cargo metadata from the repo root, which has no Cargo.toml -- cargo-ndk and uniffi-bindgen do not honour --manifest-path for that step; bindgen-kotlin also pointed at a .so host cdylib that is .dylib on macOS. Neither task had ever been invoked via cargo make (Run 9 ran uniffi-bindgen directly). Defect 4 (class dependency; fixed 8dc6dab): reqwest default-tls -> native-tls -> openssl-sys, no aarch64-linux-android sysroot; swapped to rustls-tls (webpki roots) with atrium-oauth/atrium-xrpc-client default-features off; lockfile -32 lines, openssl chain gone. NDK r30 -> 16 KB page alignment by default; no alignment friction. After fixes: cross-compile first-pass green for both ABIs (arm64 36.25s, x86_64 38.84s, 75.49s total); every crypto/-sys crate (ring, blake3, curve25519-dalek, chacha20poly1305, libsqlite3-sys bundled) built clean; liblfs_core.so 12.9 MB per ABI unstripped. Kotlin generated from the Android arm64 ELF on the macOS host: 1,687 lines, same count as Run 9 from the Linux host .so. ktlint absent (warning only). No AAR task exists; the AAR is the Gradle build's output in Run 14.
+loe_note:            Android toolchain install (rustup targets, cargo-ndk 16s, Android Studio Quail 4 2026.1.4p1 + SDK 37 + NDK r30 + Play arm64 image 2.2 GB + AVD Pixel 9) ~45 min operator wall-clock (~ estimated; not timed). Run itself 16 min, of which ~12 min was diagnosing and fixing four defects, ~2.5 min compiling. Fix commits 6cfee9e, 8dc6dab. Harness defects H-3 (placeholder in a runnable block, ~1 min) and H-4 (two tasks in one block after saying stop-at-first-failure, ~0 min) logged; class other, no repo change. Phase 1 pre-decision added: mobile TLS backend (rustls + platform verifier vs webpki roots vs vendored OpenSSL). Host test-network under rustls NOT yet re-run -- Run 15 covers B4 on device; a host re-verify rides in Run 15's loe_note.
+next:                Run 14 -- shell-run: Compose shell on AVD Pixel 9 (arm64, API 37.2): type -> save -> kill -> reload -> text returns
