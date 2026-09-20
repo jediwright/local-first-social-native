@@ -1,0 +1,23 @@
+core/target/
+bindings/kotlin/generated/
+bindings/kotlin/jniLibs/
+bindings/swift/generated/
+*.xcframework
+*.aar
+
+# Android shell (Unit 4)
+apps/android/.gradle/
+apps/android/build/
+apps/android/**/build/
+apps/android/local.properties
+apps/android/.idea/
+apps/android/*.iml
+
+# iOS shell (Unit 5)
+apps/ios/**/xcuserdata/
+apps/ios/**/*.xcworkspace/xcuserdata/
+apps/ios/**/DerivedData/
+apps/ios/**/.build/
+
+# macOS
+.DS_Store

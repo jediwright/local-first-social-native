@@ -1,0 +1,44 @@
+[package]
+name = "lfs_core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Phase 0 Rust core: one Automerge doc round-tripping through a UniFFI boundary. No identity, no seam, no sync."
+
+[lib]
+crate-type = ["lib", "staticlib", "cdylib"]   # staticlib -> xcframework; cdylib -> Android .so
+name = "lfs_core"
+
+[features]
+default = []
+# B5 - declared, not exercised. Feature-gated off the round-trip path.
+subduction = ["dep:subduction_keyhive", "dep:subduction_iroh"]
+
+[dependencies]
+# B2 - Automerge. samod/autosurgeon 0.14.0 (2026-09-17) -> automerge 0.12. Pin decision: see observation log.
+automerge   = "0.12"
+autosurgeon = "0.14"
+samod       = { version = "0.14", features = ["tokio"] }
+# B1 - storage behind a trait
+rusqlite = { version = "0.40", features = ["bundled"] }
+# B3 - pin only; no Keyhive object is created in Phase 0 (L-4, L-12)
+keyhive_core = "=0.5.0"
+# B4 - declared; one DID->PDS resolve (no writes)
+atrium-api         = "0.25"
+atrium-oauth       = "0.1"
+atrium-identity    = "0.1"
+atrium-repo        = "0.1"
+atrium-crypto      = "0.1"
+atrium-common      = "0.1"
+atrium-xrpc-client = "0.5"
+# B5 - Subduction git workspace, rev pinned 2026-09-20 (S-10)
+subduction_keyhive = { git = "https://github.com/inkandswitch/subduction", rev = "21b2e6b8", optional = true }
+subduction_iroh    = { git = "https://github.com/inkandswitch/subduction", rev = "21b2e6b8", optional = true }
+# B6 - FFI
+uniffi = "0.32"
+# runtime
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
+thiserror = "2"
+
+[dev-dependencies]
+tempfile = "3"

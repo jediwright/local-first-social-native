@@ -1,0 +1,9 @@
+[workspace]
+resolver = "2"
+members = ["crates/lfs_core", "crates/uniffi-bindgen"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.90.0"   # keyhive_core 0.5.0 floor (crates.io read 2026-09-20)
+license = "Apache-2.0"
