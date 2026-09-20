@@ -11,6 +11,7 @@ final class Shell: ObservableObject, @unchecked Sendable {
     @Published var status = "starting"
     @Published var pins = ""
     @Published var resolveStatus = ""
+    @Published var oauthStatus = ""
     private var core: Core?
     private var handle: UInt64 = 0
 
@@ -79,10 +80,12 @@ struct ContentView: View {
                 Button("Save") { shell.save() }
                 Button("Reload") { shell.reload() }
                 Button("Resolve") { shell.resolve() }
+                Button("OAuth") { shell.oauth() }
             }
             .buttonStyle(.bordered)
             Text(shell.status).font(.footnote)
             Text(shell.resolveStatus).font(.footnote)
+            Text(shell.oauthStatus).font(.footnote)
             Text(shell.pins).font(.caption2).foregroundStyle(.secondary)
             Spacer()
         }
