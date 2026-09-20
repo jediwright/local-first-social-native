@@ -5,10 +5,12 @@ import LfsCore
 /// Phase 0 B7 shell. One screen, parity with the Android B8 Compose shell:
 /// openDoc("note") on launch, put+save on Save, openDoc+get on Reload.
 /// Core-owned SQLite at Application Support/lfs.sqlite. No Keychain (Phase 1).
-final class Shell: ObservableObject {
+/// Run 19 (B4 on device): Resolve calls resolvePds on a background queue.
+final class Shell: ObservableObject, @unchecked Sendable {
     @Published var text = ""
     @Published var status = "starting"
     @Published var pins = ""
+    @Published var resolveStatus = ""
     private var core: Core?
     private var handle: UInt64 = 0
 
@@ -44,6 +46,25 @@ final class Shell: ObservableObject {
             status = "error: \(error.localizedDescription)"
         }
     }
+
+    /// B4 on device: blocking FFI call (rustls + tokio inside the core), so it runs off the main thread.
+    func resolve() {
+        resolveStatus = "resolving..."
+        let did = "did:plc:z72i7hdynmk6r22z27h6tvur"
+        DispatchQueue.global(qos: .userInitiated).async {
+            let t0 = Date()
+            var result = ""
+            do {
+                guard let core = self.core else { return }
+                let pds = try core.resolvePds(did: did)
+                let ms = Int(Date().timeIntervalSince(t0) * 1000)
+                result = "resolvePds ok in \(ms) ms: \(pds)"
+            } catch {
+                result = "resolvePds error: \(error)"
+            }
+            DispatchQueue.main.async { self.resolveStatus = result }
+        }
+    }
 }
 
 struct ContentView: View {
@@ -57,9 +78,11 @@ struct ContentView: View {
             HStack {
                 Button("Save") { shell.save() }
                 Button("Reload") { shell.reload() }
+                Button("Resolve") { shell.resolve() }
             }
             .buttonStyle(.bordered)
             Text(shell.status).font(.footnote)
+            Text(shell.resolveStatus).font(.footnote)
             Text(shell.pins).font(.caption2).foregroundStyle(.secondary)
             Spacer()
         }
