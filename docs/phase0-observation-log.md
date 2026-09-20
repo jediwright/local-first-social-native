@@ -419,3 +419,22 @@ l14_note:            B12 on Android, emulator-5554 (Pixel_9 AVD, Android 17 imag
 loe_note:            Run 21 wall-clock 6 min (C0 20:57:44Z -> commit 21:03:38Z): manifest 2-substitution perl edit, MainActivity.kt full-file rewrite (157 lines; harness estimate said 152 -- miss logged as a note, heredoc governs), Gradle install, force-stop/restart, two Chrome first-run dismissals, callback, screencap. iOS Run 20 was also 6 min -> the OAuth-path smoke shows no L-14 asymmetry at all; the asymmetry lives in binding-build and shell-run (Runs 13/14 vs 17/18). Harness defects: 0. LOE packet "OAuth-path readiness" Android row: no workarounds; one environment note (Chrome first-run on fresh AVDs). Unit 6 build items closed (B12 both); B9 and B10 notes remain.
 next:                B9 Bedrock common.nix fork-read note and B10 did:plc verification-method route note (docs/); harness-side reads need container egress or operator pastes. Then Unit 7: sentinel-check re-run (A-O3), exit check vs plan §0, LOE packet, L-14 delta, close.
 ```
+
+```
+run:                 22
+run_type:            note
+platform:            n/a
+started_at:          2026-09-20T21:06:00.000Z
+ended_at:            2026-09-20T21:09:51.000Z
+elapsed_min:         4
+clean_checkout:      n/a
+commit:              00948e2
+pins:                n/a
+outcome:             pass
+defects:             0
+defect_classes:      n/a
+sentinel_state:      n/a
+l14_note:            n/a
+loe_note:            B9 and B10 filed as docs/bedrock-common-nix-read.md (34 lines) and docs/did-plc-route-oi-m4.md (31 lines), overwriting the repo-creation stubs at those paths (A-O35). Sources read harness-side from the container via codeload tarballs (connector declared at the Unit 6 midpoint: egress to github.com / api.github.com / codeload / raw, reads only, A-O34); GitHub API rate-limited on the shared IP after 3 calls, as plan §3 predicted — tarballs unaffected. B9 (inkandswitch/bedrock main, updated 2026-09-08, sha not taken ~): hosted default is Caddy TLS -> Subduction WS on localhost:8080, auth="open", first-boot 32-byte key seed as host identity, redb + resident-tree cache, memory caps from incidents, and Caddy access logs designed to join peer ID to client IP for 14 days -- the metadata-custody point the Phase 1 self-host decision turns on; staging host (4 GB) is the minimum-viable self-host shape; transport is WS not QUIC (L-5 fallback role). B10 (did-method-plc main, pushed 2026-09-01, spec v0.1): verificationMethods accept any did:key type with no DID control, each change is a rotation-key-signed PLC op with a 72 h window and a permanent public log; the Keyhive doc ID cannot be a verification method; ROUTE NAMED = record route (social.localfirst.identity under OAuth); OI-M4 CLOSES with the verification-method route verified-available-and-declined; residue (post-T4 DID-side key commitment, Phase 4b) queued for the spec v0.1.5 cut list. started_at is the first fetch, ~ (not captured by date -u). No harness defects. Unit 6 fully closed: B9, B10, B12 both platforms.
+next:                Unit 6 close block + downloadable handoff. Unit 7 next session: sentinel-check re-run (A-O3, Run 0 now ~6 h old), exit check vs plan §0 verbatim, LOE packet (§5) from log fields, L-14 delta with both platforms' numbers, close handoff + LOE packet downloadable.
+```
