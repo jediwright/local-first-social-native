@@ -476,3 +476,22 @@ l14_note:            L-14 quantified (LOE packet §4): run wall-clock to round-t
 loe_note:            Exit criterion (plan §0 verbatim: "Hello-world with an Automerge doc round-tripping through the core on a device") MET on iOS (Run 18, physical) and on Android (Run 14, emulator under D-8); both saves 159 bytes. B1-B12 all met. Phase 0 total ~6.3 h governed wall-clock (Run 0 start → this entry), ~51 min toolchain installs outside runs, 24 runs, 5 repo defects, 12 harness defects. LOE packet filed as docs/phase0-loe-packet_2026-09-20.md (plan §5 fields; estimate section ~). Phase 0 closes on the same upstream sentinel state it opened on. Log residue noted, not edited: Run 10 blank block; Run 12 timestamps unfilled.
 next:                Phase 1 plan — not before the T4 scoping ruling (S-12(b)); physical Android device first Phase 1 item; spec v0.1.5 Lightweight cut; SL-0241 / B11 / L-14 deltas append in order, VERIFY tail.
 ```
+
+```
+run:                 25
+run_type:            note
+platform:            n/a
+started_at:          2026-09-20T22:16:22.000Z
+ended_at:            2026-09-20T22:16:22.000Z
+elapsed_min:         0
+clean_checkout:      n/a
+commit:              n/a
+pins:                n/a
+outcome:             pass
+defects:             0
+defect_classes:      n/a
+sentinel_state:      n/a
+l14_note:            n/a
+loe_note:            RULING R-P0-17 (operator, 2026-09-20, post-close): a device identifier recorded in the Run 18, 19 and 20 l14_note fields is redacted from this log and from repository history (git filter-repo, replacement token in place). Append-only rule set aside for this one edit, by ruling, and recorded here rather than done silently. Commits from Run 18 forward were rewritten; the old-to-new sha map is held with the operator's session handoffs, not in this repository. No content other than the identifier changed.
+next:                Ledger appends (SL-0241 -> B11 -> L-14) with tail verification; Discord/GitHub asks; T4 scoping session.
+```
