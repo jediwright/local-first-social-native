@@ -49,6 +49,7 @@ description = "iOS: staticlib for device + simulator, Swift bindings, xcframewor
 script = '''
 set -e
 cd "${CORE_DIR}"
+export IPHONEOS_DEPLOYMENT_TARGET=17.0
 cargo build -p "${LIB}" --release --target aarch64-apple-ios
 cargo build -p "${LIB}" --release --target aarch64-apple-ios-sim
 cargo run -p uniffi-bindgen -- generate \
