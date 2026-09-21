@@ -515,7 +515,25 @@ dependencies = [
  "dupe",
  "ed25519-dalek 2.2.0",
  "future_form",
- "keyhive_crypto",
+ "keyhive_crypto 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "nonempty 0.10.0",
+ "rand 0.8.8",
+ "serde",
+ "thiserror 1.0.69",
+ "tracing",
+]
+
+[[package]]
+name = "beekem"
+version = "0.3.0"
+source = "git+https://github.com/inkandswitch/keyhive?rev=90fe4a51#90fe4a51e38de44cfcef3ea7d504f6bcb2ccfe4b"
+dependencies = [
+ "blake3",
+ "chacha20poly1305",
+ "dupe",
+ "ed25519-dalek 2.2.0",
+ "future_form",
+ "keyhive_crypto 0.2.1 (git+https://github.com/inkandswitch/keyhive?rev=90fe4a51)",
  "nonempty 0.10.0",
  "rand 0.8.8",
  "serde",
@@ -2546,7 +2564,7 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cabda9fac1a8b07b2468d15f6bb6d0242308048218de93178ced52977e6f81a1"
 dependencies = [
- "beekem",
+ "beekem 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "bincode",
  "blake3",
  "chacha20poly1305",
@@ -2557,7 +2575,33 @@ dependencies = [
  "ed25519-dalek 2.2.0",
  "future_form",
  "futures",
- "keyhive_crypto",
+ "keyhive_crypto 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "nonempty 0.10.0",
+ "rand 0.8.8",
+ "serde",
+ "signature 2.2.0",
+ "thiserror 1.0.69",
+ "tracing",
+ "x25519-dalek",
+]
+
+[[package]]
+name = "keyhive_core"
+version = "0.5.0"
+source = "git+https://github.com/inkandswitch/keyhive?rev=90fe4a51#90fe4a51e38de44cfcef3ea7d504f6bcb2ccfe4b"
+dependencies = [
+ "beekem 0.3.0 (git+https://github.com/inkandswitch/keyhive?rev=90fe4a51)",
+ "bincode",
+ "blake3",
+ "chacha20poly1305",
+ "derivative",
+ "derive-where",
+ "derive_more 1.0.0",
+ "dupe",
+ "ed25519-dalek 2.2.0",
+ "future_form",
+ "futures",
+ "keyhive_crypto 0.2.1 (git+https://github.com/inkandswitch/keyhive?rev=90fe4a51)",
  "nonempty 0.10.0",
  "rand 0.8.8",
  "serde",
@@ -2572,6 +2616,27 @@ name = "keyhive_crypto"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af2feeaee7929bfabd6ac79a36d86ebbeb648cc137267e6c5b1465d2f657c313"
+dependencies = [
+ "bincode",
+ "blake3",
+ "chacha20poly1305",
+ "derive_more 1.0.0",
+ "dupe",
+ "ed25519-dalek 2.2.0",
+ "future_form",
+ "futures",
+ "rand 0.8.8",
+ "serde",
+ "signature 2.2.0",
+ "thiserror 1.0.69",
+ "tracing",
+ "x25519-dalek",
+]
+
+[[package]]
+name = "keyhive_crypto"
+version = "0.2.1"
+source = "git+https://github.com/inkandswitch/keyhive?rev=90fe4a51#90fe4a51e38de44cfcef3ea7d504f6bcb2ccfe4b"
 dependencies = [
  "bincode",
  "blake3",
@@ -2623,7 +2688,7 @@ dependencies = [
  "atrium-xrpc-client",
  "automerge",
  "autosurgeon",
- "keyhive_core",
+ "keyhive_core 0.5.0 (git+https://github.com/inkandswitch/keyhive?rev=90fe4a51)",
  "reqwest 0.12.28",
  "rusqlite",
  "samod",
@@ -4684,8 +4749,8 @@ dependencies = [
  "ed25519-dalek 2.2.0",
  "future_form",
  "futures",
- "keyhive_core",
- "keyhive_crypto",
+ "keyhive_core 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "keyhive_crypto 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.8.8",
  "sedimentree_core",
  "subduction_core",

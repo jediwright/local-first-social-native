@@ -22,7 +22,7 @@ samod       = { version = "0.14", features = ["tokio"] }
 # B1 - storage behind a trait
 rusqlite = { version = "0.40", features = ["bundled"] }
 # B3 - pin only; no Keyhive object is created in Phase 0 (L-4, L-12)
-keyhive_core = "=0.5.0"
+keyhive_core = { git = "https://github.com/inkandswitch/keyhive", rev = "90fe4a51" }
 # B4 - declared; one DID->PDS resolve (no writes)
 # TLS: rustls, not native-tls (Run 13 defect 4: native-tls -> openssl-sys has no aarch64-linux-android
 # sysroot). webpki roots for Phase 0; platform verifier is a Phase 1 pre-decision.
