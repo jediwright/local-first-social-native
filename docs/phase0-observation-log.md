@@ -495,3 +495,22 @@ l14_note:            n/a
 loe_note:            RULING R-P0-17 (operator, 2026-09-20, post-close): a device identifier recorded in the Run 18, 19 and 20 l14_note fields is redacted from this log and from repository history (git filter-repo, replacement token in place). Append-only rule set aside for this one edit, by ruling, and recorded here rather than done silently. Commits from Run 18 forward were rewritten; the old-to-new sha map is held with the operator's session handoffs, not in this repository. No content other than the identifier changed.
 next:                Ledger appends (SL-0241 -> B11 -> L-14) with tail verification; Discord/GitHub asks; T4 scoping session.
 ```
+
+```
+run:                 26
+run_type:            pin-decision
+platform:            n/a (container resolution + operator canonical apply)
+started_at:          2026-09-20T23:42:00.000Z
+ended_at:            2026-09-21T00:17:53.000Z
+elapsed_min:         36
+clean_checkout:      yes (fresh container; reproduction workspace)
+commit:              f70889b
+pins:                keyhive_core=git+https://github.com/inkandswitch/keyhive?rev=90fe4a51 (H6 ADOPTED; was =0.5.0 crates.io) samod=0.14.0 autosurgeon=0.14.0 subduction=21b2e6b8 atrium-api=0.25.8 reqwest=0.12.28(rustls-tls) uniffi=0.32.1
+outcome:             pass
+defects:             0
+defect_classes:      n/a
+sentinel_state:      S-1=0.5.0 S-2=main@90fe4a51(2026-09-17, no new commits) S-3=#230 OPEN/DRAFT/unmerged S-4=kh0 S-5="0.5" | S-12(a)=null (CHANGELOG 404 root + keyhive_core; #keyhive not read from container) S-12(b)=`2026-sept-updates` EXISTS (head 881226c9, unchanged since Run 23), NOT merged (branch-containment check: head on branch only, not main) S-13=no maintainer replies attached this session. NO STOP CONDITION FIRED. All values identical to Run 23. In-tree keyhive_core version = "0.5.0".
+l14_note:            n/a
+loe_note:            First Phase 1 run; wall-clock 36 min including container toolchain bootstrap and operator canonical apply. GitHub API rate-limited at first call (plan section 3 pattern); raw/atom/HTML fallback per Run 23 discipline. H6 executed twice: (1) container reproduction workspace (Ubuntu-packaged cargo/rustc 1.91.1, same minor as Phase 0 container toolchain) — baseline =0.5.0 locks 91 packages, exact LOE packet section 3 / Run 3 match; git pin locks 91 packages, lockfile name+version symmetric diff vs crates.io baseline NONE — identical dep set re-confirmed; (2) canonical apply same session: core/crates/lfs_core/Cargo.toml edited, commit f70889b (2 files, +72/-7, committed 2026-09-21T00:17:53Z); done-when test re-run on operator machine — PASS, identical tree line to container reproduction; lock churn limited to keyhive_core/beekem 0.3.0/keyhive_crypto 0.2.1 (versions match LOE section 3). DONE-WHEN TEST (plan section 4 H6) PASSES both sides: cargo tree -p keyhive_core -> keyhive_core v0.5.0 (https://github.com/inkandswitch/keyhive?rev=90fe4a51#90fe4a51). Declaring manifest is core/crates/lfs_core/Cargo.toml (one level deeper than plan section 7 sketch layout, ~ noted). Run close extended to the canonical apply commit; container work ended 00:10Z. Correctness fixes #226/#227/#232/#233 apply from first Phase 1 build per SL-0244/H6. NUMBERING: plan section 6 proposed "Run 25" for H6, but Run 25 was consumed by the R-P0-17 redaction note (SL-0245); log is append-only and sequential, so this run is 26 and section 6 proposed runs shift +1 (physical Android -> 27, runtime -> 28, sync-host -> 29). Operator accepted as silent carry 2026-09-20; plan text not amended.
+next:                Run 27 -- physical-android (D-8 close), first device-level Android run, git pin in the lockfile it builds from.
+```
