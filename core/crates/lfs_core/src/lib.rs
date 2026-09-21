@@ -2,7 +2,9 @@
 //! API surface is exactly the plan's B1 list. No delegation-level concept exists here (L-12 interim).
 uniffi::setup_scaffolding!();
 
+pub mod docs;
 pub mod resolve;
+pub(crate) mod runtime;
 pub mod storage;
 
 use autosurgeon::{hydrate, reconcile, Hydrate, Reconcile};
@@ -22,7 +24,11 @@ pub enum CoreError {
     Network(String),
 }
 
-/// The one document shape Phase 0 round-trips. Phase 1+ replaces it; nothing here is a schema ruling.
+/// The Phase 0 round-trip shape. Run 32 decision: KEPT, not retired — it
+/// backs the generic KV FFI surface (`open_doc`/`put`/`get`) both shells
+/// wired in Run 31; retiring it would churn the shell contract inside an
+/// additive doc-model run. The Phase 1 typed shapes live in `docs`
+/// (profile/pings/threads); HelloDoc carries no schema ruling.
 #[derive(Default, Debug, Clone, Hydrate, Reconcile, PartialEq)]
 pub struct HelloDoc {
     pub entries: BTreeMap<String, String>,
@@ -38,17 +44,28 @@ pub struct Core {
     store: Box<dyn DocStore>,
     open: Mutex<HashMap<u64, Open>>,
     next: Mutex<u64>,
+    /// Run 32 — membership-version counter state (plan §1 1a: interface
+    /// only, no Keyhive backend). In-memory by design: the counter is the
+    /// seam 1b's real membership events will drive; nothing here is a
+    /// persistence ruling.
+    membership: Mutex<HashMap<String, u64>>,
+}
+
+/// Run 30 — the explicit FFI init entry point (Run 27 lifecycle contract).
+/// Opens (creating if absent) the SQLite db at the shell-provided path AND
+/// touches the shared runtime, so both the storage layer and the core's
+/// long-lived tokio runtime are initialised explicitly at startup rather
+/// than lazily on first use (lazy construction remains the backstop).
+/// Blocking; shells dispatch it off-main (wired in Run 31, A-O22).
+/// The sole FFI init path: `Core::new` is crate-internal as of Run 31.
+#[uniffi::export]
+pub fn init_core(db_path: String) -> Result<std::sync::Arc<Core>, CoreError> {
+    let _ = runtime::rt(); // explicit-at-startup runtime init
+    Ok(std::sync::Arc::new(Core::new(db_path)?))
 }
 
 #[uniffi::export]
 impl Core {
-    /// `db_path` — SQLite file; `":memory:"` for tests.
-    #[uniffi::constructor]
-    pub fn new(db_path: String) -> Result<Self, CoreError> {
-        let store = SqliteStore::open(&db_path).map_err(|e| CoreError::Storage(e.to_string()))?;
-        Ok(Self { store: Box::new(store), open: Mutex::new(HashMap::new()), next: Mutex::new(1) })
-    }
-
     /// open_doc(id) -> handle. Loads from the store if present, else starts an empty doc.
     pub fn open_doc(&self, id: String) -> Result<u64, CoreError> {
         let doc = match self.store.read(&id).map_err(|e| CoreError::Storage(e.to_string()))? {
@@ -95,6 +112,25 @@ impl Core {
         resolve::resolve_pds_blocking(&did)
     }
 
+    /// Run 32 — membership-version counter, read side (plan §1 1a:
+    /// "Counter increments on membership event; interface in place").
+    /// Interface only: no Keyhive backend; 1b backs this with Keyhive
+    /// group membership. Version 0 = no membership event seen for the group.
+    pub fn membership_version(&self, group_id: String) -> u64 {
+        *self.membership.lock().unwrap().get(&group_id).unwrap_or(&0)
+    }
+
+    /// Run 32 — membership-version counter, event side. Records one
+    /// (simulated) membership event for `group_id` and returns the new
+    /// version. 1b replaces the simulation with real Keyhive membership
+    /// events driving the same interface; the signature is the seam.
+    pub fn record_membership_event(&self, group_id: String) -> u64 {
+        let mut m = self.membership.lock().unwrap();
+        let v = m.entry(group_id).or_insert(0);
+        *v += 1;
+        *v
+    }
+
     /// Pin attestation for the observation log.
     pub fn pins(&self) -> String {
         format!(
@@ -105,6 +141,21 @@ impl Core {
 }
 
 impl Core {
+    /// Crate-internal constructor. Retired from the FFI surface in the
+    /// A-O22 shell-integration run (Run 31): both shells now call
+    /// `init_core`, the one explicit init path across FFI (finding (a)
+    /// settled — retirement lands with the shell migration, same run).
+    /// `db_path` — SQLite file; `":memory:"` for tests.
+    pub(crate) fn new(db_path: String) -> Result<Self, CoreError> {
+        let store = SqliteStore::open(&db_path).map_err(|e| CoreError::Storage(e.to_string()))?;
+        Ok(Self {
+            store: Box::new(store),
+            open: Mutex::new(HashMap::new()),
+            next: Mutex::new(1),
+            membership: Mutex::new(HashMap::new()),
+        })
+    }
+
     fn insert(&self, o: Open) -> u64 {
         let mut n = self.next.lock().unwrap();
         let h = *n;
@@ -154,6 +205,151 @@ mod tests {
         assert_eq!(core.get(h, "k".into()).unwrap().as_deref(), Some("v"));
     }
 
+    /// Run 30 done-when: db file created at the path the init entry point is
+    /// given; runtime touched; core usable end to end through it.
+    #[test]
+    fn init_core_creates_db_at_path_and_inits_runtime() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("init.sqlite").to_string_lossy().to_string();
+        let core = init_core(path.clone()).unwrap();
+        assert!(std::path::Path::new(&path).exists(), "db file created at shell-provided path");
+        let h = core.open_doc("via-init".into()).unwrap();
+        core.put(h, "k".into(), "v".into()).unwrap();
+        core.save(h).unwrap();
+        assert_eq!(core.get(h, "k".into()).unwrap().as_deref(), Some("v"));
+        // runtime is initialised and shared
+        assert_eq!(crate::runtime::rt().block_on(async { 1 + 1 }), 2);
+    }
+
+    /// Run 32 helper — round-trip one typed doc through the Storage trait:
+    /// reconcile → automerge save → trait write (automerge.save.v1 tag,
+    /// Run 30 schema) → trait read → load → hydrate → equality. Also
+    /// asserts the row carries the format tag (rows never re-tagged).
+    fn round_trip_typed<T: autosurgeon::Hydrate + autosurgeon::Reconcile + PartialEq + std::fmt::Debug>(
+        path: &str,
+        id: &str,
+        value: &T,
+    ) {
+        let store: Box<dyn DocStore> = Box::new(SqliteStore::open(path).unwrap());
+        let mut doc = automerge::AutoCommit::new();
+        reconcile(&mut doc, value).unwrap();
+        store.write(id, &doc.save()).unwrap();
+        let bytes = store.read(id).unwrap().expect("row present");
+        let loaded = automerge::AutoCommit::load(&bytes).unwrap();
+        let back: T = hydrate(&loaded).unwrap();
+        assert_eq!(&back, value);
+        let conn = rusqlite::Connection::open(path).unwrap();
+        let fmt: String = conn
+            .query_row("SELECT format FROM docs WHERE id = ?1", rusqlite::params![id], |r| r.get(0))
+            .unwrap();
+        assert_eq!(fmt, storage::FORMAT_AUTOMERGE_SAVE_V1);
+    }
+
+    /// Run 32 done-when (1 of 3): profile doc round-trips under the trait.
+    #[test]
+    fn profile_doc_round_trips_under_trait() {
+        use crate::docs::*;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("p1-profile.sqlite").to_string_lossy().to_string();
+        let mut trust = BTreeMap::new();
+        trust.insert(
+            "contact-1".into(),
+            TrustEntry { tier: "close".into(), connected_at: "2026-09-21T00:00:00Z".into(), sync_status: "synced".into() },
+        );
+        let profile = ProfileDoc {
+            identity: Identity {
+                display_name: "Jedi".into(),
+                handle: "@jedi".into(),
+                handle_registered_at: "2026-09-21T00:00:00Z".into(),
+                avatar_color: "#3a7".into(),
+                created_at: "2026-09-21T00:00:00Z".into(),
+            },
+            preferences: Preferences { default_ping_type: "here".into(), notifications_enabled: true, discoverable: false },
+            trust_graph: trust,
+            ping_history: vec![Ping {
+                ping_id: "p1".into(),
+                ping_type: "thinking-of-you".into(),
+                sender_id: "self".into(),
+                sent_at: "2026-09-21T01:00:00Z".into(),
+                expires_at: "2026-09-21T02:00:00Z".into(),
+                content: None,
+            }],
+            channel_memberships: vec![ChannelMembership {
+                channel_id: "ch-local-first".into(),
+                joined_at: "2026-09-21T00:30:00Z".into(),
+                last_ping_at: "2026-09-21T01:00:00Z".into(),
+            }],
+        };
+        round_trip_typed(&path, "profile", &profile);
+    }
+
+    /// Run 32 done-when (2 of 3): pings doc round-trips under the trait.
+    #[test]
+    fn pings_doc_round_trips_under_trait() {
+        use crate::docs::*;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("p1-pings.sqlite").to_string_lossy().to_string();
+        let mut channels = BTreeMap::new();
+        channels.insert(
+            "ch-local-first".into(),
+            vec![
+                Ping {
+                    ping_id: "p2".into(),
+                    ping_type: "check-this".into(),
+                    sender_id: "contact-1".into(),
+                    sent_at: "2026-09-21T01:10:00Z".into(),
+                    expires_at: "2026-09-21T03:10:00Z".into(),
+                    content: Some("subduction thread".into()),
+                },
+                Ping {
+                    ping_id: "p3".into(),
+                    ping_type: "here".into(),
+                    sender_id: "self".into(),
+                    sent_at: "2026-09-21T01:12:00Z".into(),
+                    expires_at: "2026-09-21T02:12:00Z".into(),
+                    content: None,
+                },
+            ],
+        );
+        round_trip_typed(&path, "pings", &PingsDoc { channels });
+    }
+
+    /// Run 32 done-when (3 of 3): threads doc round-trips under the trait.
+    #[test]
+    fn threads_doc_round_trips_under_trait() {
+        use crate::docs::*;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("p1-threads.sqlite").to_string_lossy().to_string();
+        let mut threads = BTreeMap::new();
+        threads.insert(
+            "contact-1".into(),
+            vec![Message {
+                message_id: "m1".into(),
+                sender_id: "contact-1".into(),
+                sent_at: "2026-09-21T01:20:00Z".into(),
+                content: "elevating to a thread".into(),
+                asset_ref: Some("asset-9".into()),
+                read_at: None,
+            }],
+        );
+        round_trip_typed(&path, "threads", &ThreadsDoc { threads });
+    }
+
+    /// Run 32 done-when (Task 3): counter increments on a simulated
+    /// membership event through the FFI surface (`init_core` + exported
+    /// methods — the same path the shells call).
+    #[test]
+    fn membership_counter_increments_via_ffi_surface() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("p1-membership.sqlite").to_string_lossy().to_string();
+        let core = init_core(path).unwrap();
+        assert_eq!(core.membership_version("group-a".into()), 0, "no events yet");
+        assert_eq!(core.record_membership_event("group-a".into()), 1);
+        assert_eq!(core.record_membership_event("group-a".into()), 2);
+        assert_eq!(core.membership_version("group-a".into()), 2);
+        assert_eq!(core.membership_version("group-b".into()), 0, "per-group isolation");
+    }
+
     #[test]
     fn keyhive_pin_links() {
         assert!(keyhive_core_linked().contains("keyhive_core"));
@@ -180,5 +376,17 @@ mod tests {
         let core = Core::new(":memory:".into()).unwrap();
         let pds = core.resolve_pds("did:plc:z72i7hdynmk6r22z27h6tvur".into()).unwrap(); // bsky.app
         assert!(pds.starts_with("https://"));
+    }
+
+    /// Run 29 done-when (Run 27 wording): two consecutive resolvePds calls in one
+    /// process — reuse of the shared runtime proven, not construct-per-call.
+    /// Live network like the test above; `--ignored` on a machine with egress.
+    #[test]
+    #[ignore]
+    fn resolve_pds_twice_in_one_process() {
+        let core = Core::new(":memory:".into()).unwrap();
+        let a = core.resolve_pds("did:plc:z72i7hdynmk6r22z27h6tvur".into()).unwrap();
+        let b = core.resolve_pds("did:plc:z72i7hdynmk6r22z27h6tvur".into()).unwrap();
+        assert!(a.starts_with("https://") && a == b);
     }
 }

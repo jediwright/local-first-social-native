@@ -18,10 +18,8 @@ pub async fn resolve_pds(did: &str) -> Result<String, CoreError> {
         .ok_or_else(|| CoreError::Network("no PDS service in DID document".into()))
 }
 
+/// Blocks on the core's shared runtime (Run 27 ruling; Run 29 apply).
+/// No runtime is constructed here — see `crate::runtime::rt()`.
 pub fn resolve_pds_blocking(did: &str) -> Result<String, CoreError> {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .map_err(|e| CoreError::Network(e.to_string()))?;
-    rt.block_on(resolve_pds(did))
+    crate::runtime::rt().block_on(resolve_pds(did))
 }
