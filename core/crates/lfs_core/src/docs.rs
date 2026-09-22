@@ -15,14 +15,26 @@
 //! - Rust field naming is snake_case; the spec's camelCase names map 1:1
 //!   (displayName → display_name, etc.). Shape divergence: none intended;
 //!   any found later is flagged against the spec, not silently adapted.
+//!
+//! Run 33 (local-UI wiring) — these structs ARE the typed FFI surface
+//! (build rule, record §3): each derives `uniffi::Record` so the spec-derived
+//! shape crosses the boundary once, from one definition, with no mirror
+//! types and no JSON schema copy in either shell. The display requirement
+//! decided it: both shells render typed lists (spec `ContactList` /
+//! `PingFeed` / `ThreadList` semantics) and need compile-time field access,
+//! not a parser. Consequence of the choice, recorded not silent: maps are
+//! `HashMap`, not `BTreeMap` — uniffi 0.32.1 lowers `HashMap<K, V>` only
+//! (uniffi_core `ffi_converter_impls.rs` L383/L405); autosurgeon supports
+//! both. Automerge maps are unordered, so no CRDT ordering is lost; shells
+//! sort keys for display. Shape vs spec: unchanged.
 use autosurgeon::{Hydrate, Reconcile};
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 
 // ---------------------------------------------------------------- profile
 
 /// `profile.identity` (spec: displayName, handle, handleRegisteredAt,
 /// avatarColor, createdAt).
-#[derive(Default, Debug, Clone, PartialEq, Hydrate, Reconcile)]
+#[derive(Default, Debug, Clone, PartialEq, Hydrate, Reconcile, uniffi::Record)]
 pub struct Identity {
     pub display_name: String,
     pub handle: String,
@@ -33,7 +45,7 @@ pub struct Identity {
 
 /// `profile.preferences` (spec: defaultPingType, notificationsEnabled,
 /// discoverable).
-#[derive(Default, Debug, Clone, PartialEq, Hydrate, Reconcile)]
+#[derive(Default, Debug, Clone, PartialEq, Hydrate, Reconcile, uniffi::Record)]
 pub struct Preferences {
     pub default_ping_type: String,
     pub notifications_enabled: bool,
@@ -42,7 +54,7 @@ pub struct Preferences {
 
 /// One `profile.trust_graph` entry (spec: contactId → { tier, connectedAt,
 /// syncStatus }).
-#[derive(Default, Debug, Clone, PartialEq, Hydrate, Reconcile)]
+#[derive(Default, Debug, Clone, PartialEq, Hydrate, Reconcile, uniffi::Record)]
 pub struct TrustEntry {
     pub tier: String,
     pub connected_at: String,
@@ -51,7 +63,7 @@ pub struct TrustEntry {
 
 /// One `profile.channel_memberships` entry (spec: { channelId, joinedAt,
 /// lastPingAt }).
-#[derive(Default, Debug, Clone, PartialEq, Hydrate, Reconcile)]
+#[derive(Default, Debug, Clone, PartialEq, Hydrate, Reconcile, uniffi::Record)]
 pub struct ChannelMembership {
     pub channel_id: String,
     pub joined_at: String,
@@ -60,11 +72,11 @@ pub struct ChannelMembership {
 
 /// The profile document (spec `profile` map: identity, preferences,
 /// trust_graph, ping_history, channel_memberships).
-#[derive(Default, Debug, Clone, PartialEq, Hydrate, Reconcile)]
+#[derive(Default, Debug, Clone, PartialEq, Hydrate, Reconcile, uniffi::Record)]
 pub struct ProfileDoc {
     pub identity: Identity,
     pub preferences: Preferences,
-    pub trust_graph: BTreeMap<String, TrustEntry>,
+    pub trust_graph: HashMap<String, TrustEntry>,
     pub ping_history: Vec<Ping>,
     pub channel_memberships: Vec<ChannelMembership>,
 }
@@ -73,7 +85,7 @@ pub struct ProfileDoc {
 
 /// One ping (spec: { pingId, type, senderId, sentAt, expiresAt, content? }).
 /// `type` is a reserved word in Rust; carried as `ping_type`.
-#[derive(Default, Debug, Clone, PartialEq, Hydrate, Reconcile)]
+#[derive(Default, Debug, Clone, PartialEq, Hydrate, Reconcile, uniffi::Record)]
 pub struct Ping {
     pub ping_id: String,
     pub ping_type: String,
@@ -85,17 +97,22 @@ pub struct Ping {
 
 /// The pings document (spec `pings` map: channelId → array of pings).
 /// Ephemeral by spec design; expiry cleanup is a runtime behavior, not a
-/// shape property, and is out of this run's scope.
-#[derive(Default, Debug, Clone, PartialEq, Hydrate, Reconcile)]
+/// shape property. Run 33 scope: the spec's "cleanup observer removes
+/// expired entries on document load" is NOT implemented here — expired
+/// pings stay in the document and the shells filter them at display time
+/// (`expires_at` vs now). Deferred, not adapted: the shape is unchanged and
+/// a cleanup-on-load step can be added at the core later without touching
+/// the FFI surface.
+#[derive(Default, Debug, Clone, PartialEq, Hydrate, Reconcile, uniffi::Record)]
 pub struct PingsDoc {
-    pub channels: BTreeMap<String, Vec<Ping>>,
+    pub channels: HashMap<String, Vec<Ping>>,
 }
 
 // ---------------------------------------------------------------- threads
 
 /// One thread message (spec: { messageId, senderId, sentAt, content,
 /// assetRef?, readAt? }).
-#[derive(Default, Debug, Clone, PartialEq, Hydrate, Reconcile)]
+#[derive(Default, Debug, Clone, PartialEq, Hydrate, Reconcile, uniffi::Record)]
 pub struct Message {
     pub message_id: String,
     pub sender_id: String,
@@ -106,7 +123,7 @@ pub struct Message {
 }
 
 /// The threads document (spec `threads` map: contactId → array of messages).
-#[derive(Default, Debug, Clone, PartialEq, Hydrate, Reconcile)]
+#[derive(Default, Debug, Clone, PartialEq, Hydrate, Reconcile, uniffi::Record)]
 pub struct ThreadsDoc {
-    pub threads: BTreeMap<String, Vec<Message>>,
+    pub threads: HashMap<String, Vec<Message>>,
 }
