@@ -14,7 +14,7 @@
 
 All ✓ — from the repository at `a641eea` and the observation log through Run 33.
 
-- **Dependency.** `keyhive_core` is pinned to `git+https://github.com/inkandswitch/keyhive?rev=90fe4a51` with `default-features = false`. `cargo tree -p keyhive_core --depth 0` on the canonical checkout reports `keyhive_core v0.5.0 (https://github.com/inkandswitch/keyhive?rev=90fe4a51#90fe4a51)` (Run 33 apply transcript §3). Reading `keyhive_core/Cargo.toml` at `90fe4a51`, L4: `version = "0.5.0"`.
+- **Dependency.** `keyhive_core` is pinned to `git+https://github.com/inkandswitch/keyhive?rev=90fe4a51` with no optional features enabled (`core/crates/lfs_core/Cargo.toml` L25; the crate's `default = []` at `90fe4a51`). `cargo tree -p keyhive_core --depth 0` on the canonical checkout reports `keyhive_core v0.5.0 (https://github.com/inkandswitch/keyhive?rev=90fe4a51#90fe4a51)` (Run 33 apply transcript §3). Reading `keyhive_core/Cargo.toml` at `90fe4a51`, L4: `version = "0.5.0"`.
 - **The crate links, and nothing is constructed.** `core/crates/lfs_core/src/lib.rs` L254–256 (`keyhive_core_linked`) takes `type_name::<keyhive_core::access::Access>()` to force the link; the test `keyhive_pin_links` (L597) asserts it. No Keyhive group, document, delegation or event is created anywhere in the crate at this revision. The pin is proven; the API is not yet exercised.
 - **Four targets.** The Rust core cross-compiles for `aarch64-apple-ios`, `aarch64-apple-ios-sim`, `aarch64-linux-android`, `x86_64-linux-android` via `cargo make android-so` and `cargo make swift-xcframework` (transcript §4: all four `Finished release`).
 - **Typed FFI.** UniFFI 0.32.1, library mode. The three document shapes in `docs.rs` (`ProfileDoc`, `PingsDoc`, `ThreadsDoc`, L37–128) derive `uniffi::Record` and cross the boundary from one definition; `lib.rs` exports `init_core` (L74–78), `open_typed_doc` (L140), and `get_`/`put_` for each shape (L158–188). Regenerated bindings vs the prior run: +869 Swift, +814 Kotlin, 0 removals (transcript §4).
@@ -52,7 +52,7 @@ Two things are at stake for a device that established its identity under the cur
 
 The asymmetry is the point: with a retained decoder the migration is ordinary and mostly invisible; without one the *cheapest* correct path is for every consumer to vendor the old decoder itself, which is the same code, maintained N times instead of once.
 
-**What would make this ✓.** The grant stage of this app's build plan, which was paused on 2026-09-21 when upstream merged its September infrastructure update and has not resumed: two documents under real capability grants, grant and revoke observed, and a recovery path exercised. At that point the "stored rows" and "signed material" columns become measurements from real rows under real tags, and v1 of this note replaces the estimates.
+**What would make this ✓.** The grant stage of this app's build plan, not yet started: two documents under real capability grants, grant and revoke observed, and a recovery path exercised. At that point the "stored rows" and "signed material" columns become measurements from real rows under real tags, and v1 of this note replaces the estimates.
 
 ## (d) The question
 
