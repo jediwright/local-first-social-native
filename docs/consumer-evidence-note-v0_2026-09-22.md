@@ -3,7 +3,6 @@
 **Date:** 2026-09-22 · **Version:** v0 (interim; v1 follows once capability grants are exercised in this app)
 **Author:** J. Wright / UX Minds, LLC
 **Repository:** `jediwright/local-first-social-native`, `main` at `e0c2590` (code at `a641eea`)
-**Log registration:** pending Phase 1 Build Plan v0.1.1 (Addition A re-scope, queued)
 
 **Confidence marks used below:** ✓ = read directly from source or from a recorded run; ~ = estimated from the code as it stands, not yet exercised.
 
