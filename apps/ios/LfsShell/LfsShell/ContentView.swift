@@ -15,19 +15,37 @@ final class Shell: ObservableObject, @unchecked Sendable {
     private var core: Core?
     private var handle: UInt64 = 0
 
-    init() { reload() }
+    init() { start() }
 
-    func reload() {
-        do {
-            if core == nil {
+    /// Run 31 (A-O22): `initCore` is the sole FFI init path and is blocking →
+    /// detached task, never main; publish back on the main actor (§7 shape).
+    func start() {
+        status = "initializing core..."
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            do {
                 let dir = try FileManager.default.url(
                     for: .applicationSupportDirectory, in: .userDomainMask,
                     appropriateFor: nil, create: true)
                 let path = dir.appendingPathComponent("lfs.sqlite").path
-                core = try Core(dbPath: path)
-                pins = core?.pins() ?? ""
+                let core = try initCore(dbPath: path)
+                await MainActor.run {
+                    self.core = core
+                    self.pins = core.pins()
+                    self.reload()
+                }
+            } catch let e as CoreError {
+                // A-O22 check: typed catch compiles and binds — one class per error.
+                await MainActor.run { self.status = "init error: \(String(describing: e))" }
+            } catch {
+                await MainActor.run { self.status = "init error: \(error.localizedDescription)" }
             }
-            guard let core else { return }
+        }
+    }
+
+    func reload() {
+        guard let core else { status = "core initializing..."; return }
+        do {
             handle = try core.openDoc(id: "note")
             let t = try core.get(handle: handle, key: "text") ?? ""
             text = t

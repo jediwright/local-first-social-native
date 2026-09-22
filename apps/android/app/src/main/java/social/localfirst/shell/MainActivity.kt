@@ -23,8 +23,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import uniffi.lfs_core.Core
 import uniffi.lfs_core.CoreException
+import uniffi.lfs_core.initCore
 import kotlin.concurrent.thread
 
 /**
@@ -40,28 +45,42 @@ class MainActivity : ComponentActivity() {
     private var core: Core? = null
     private var handle: ULong = 0u
     private val oauthStatus: MutableState<String> = mutableStateOf("oauth-smoke: not run")
+    private val docStatus: MutableState<String> = mutableStateOf("initializing core...")
+    private val initialText: MutableState<String> = mutableStateOf("")
     private var oauthT0 = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val dbPath = filesDir.resolve("lfs.sqlite").absolutePath
-        var initial = ""
-        val status: String = try {
-            val c = Core(dbPath)
-            core = c
-            handle = c.openDoc("note")
-            initial = c.get(handle, "text") ?: ""
-            "openDoc(\"note\") ok; text=${initial.length} chars; pins=${c.pins()}"
-        } catch (e: CoreException) {
-            "CoreException: ${e.message}"
-        } catch (e: Throwable) {
-            "${e::class.simpleName}: ${e.message}"
+        // Run 31 (A-O22): initCore is the sole FFI init path and is blocking →
+        // Dispatchers.IO, never main; publish on Main (§7 shape).
+        lifecycleScope.launch(Dispatchers.IO) {
+            val dbPath = filesDir.resolve("lfs.sqlite").absolutePath
+            try {
+                val c = initCore(dbPath)
+                val h = c.openDoc("note")
+                val t = c.get(h, "text") ?: ""
+                withContext(Dispatchers.Main) {
+                    core = c
+                    handle = h
+                    initialText.value = t
+                    docStatus.value =
+                        "openDoc(\"note\") ok; text=${t.length} chars; pins=${c.pins()}"
+                }
+            } catch (e: CoreException) {
+                // A-O22 check: typed catch; subclass on demand
+                // (CoreException.Storage / .Network / .Automerge / .NoSuchHandle).
+                withContext(Dispatchers.Main) { docStatus.value = "CoreException: ${e.message}" }
+            } catch (e: Throwable) {
+                withContext(Dispatchers.Main) {
+                    docStatus.value = "${e::class.simpleName}: ${e.message}"
+                }
+            }
         }
         setContent {
             MaterialTheme {
                 Shell(
-                    initial = initial,
-                    initialStatus = status,
+                    initial = initialText.value,
+                    initialStatus = docStatus.value,
                     oauthStatus = oauthStatus.value,
                     onSave = { text ->
                         try {
@@ -133,8 +152,8 @@ fun Shell(
     onResolve: (String, (String) -> Unit) -> Unit,
     onOAuth: () -> Unit,
 ) {
-    var text by remember { mutableStateOf(initial) }
-    var status by remember { mutableStateOf(initialStatus) }
+    var text by remember(initial) { mutableStateOf(initial) }
+    var status by remember(initialStatus) { mutableStateOf(initialStatus) }
     var net by remember { mutableStateOf("resolvePds: not run") }
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
