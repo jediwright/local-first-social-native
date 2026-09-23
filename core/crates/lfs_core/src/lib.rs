@@ -23,6 +23,12 @@ pub enum CoreError {
     Automerge(String),
     #[error("network: {0}")]
     Network(String),
+    /// Run 35 — the injected clock did not parse as RFC 3339. Raised by
+    /// `open_typed_doc_at`; a bad clock is an error, never a silent no-op
+    /// (an unparseable `expires_at` on a ping is the retained case, not
+    /// this one).
+    #[error("invalid timestamp: {0}")]
+    InvalidTimestamp(String),
 }
 
 /// The Phase 0 round-trip shape. Run 32 decision: KEPT, not retired — it
@@ -138,20 +144,25 @@ impl Core {
     /// empty, well-formed doc rather than a hydrate error). Handles are the
     /// same space as `open_doc`; `save`/`load` apply unchanged.
     pub fn open_typed_doc(&self, id: String, kind: DocKind) -> Result<u64, CoreError> {
-        let doc = match self.store.read(&id).map_err(|e| CoreError::Storage(e.to_string()))? {
-            Some(bytes) => automerge::AutoCommit::load(&bytes).map_err(|e| CoreError::Automerge(e.to_string()))?,
-            None => {
-                let mut d = automerge::AutoCommit::new();
-                let r = match kind {
-                    DocKind::Profile => reconcile(&mut d, &ProfileDoc::default()),
-                    DocKind::Pings => reconcile(&mut d, &PingsDoc::default()),
-                    DocKind::Threads => reconcile(&mut d, &ThreadsDoc::default()),
-                };
-                r.map_err(|e| CoreError::Automerge(e.to_string()))?;
-                d
-            }
-        };
-        Ok(self.insert(Open { id, doc }))
+        // Run 35: signature and behaviour unchanged (no clock supplied, so
+        // no cleanup step runs — library code never reads the wall).
+        self.open_typed_doc_inner(id, kind, None)
+    }
+
+    /// Run 35 (1a hardening) — `open_typed_doc` with the cleanup-on-load
+    /// step (spec: "a cleanup observer removes expired entries on document
+    /// load"). `now` is the injected clock, RFC 3339 (`Z` or numeric
+    /// offset; fractional seconds accepted) — the caller supplies it, the
+    /// core never reads the wall. For `kind = Pings`, every ping whose
+    /// `expires_at` parses and is strictly earlier than `now` is deleted
+    /// from its channel list in the opened document; a ping whose
+    /// `expires_at` does not parse is retained. For other kinds `now` is
+    /// validated and otherwise unused. The cleanup edits the in-memory
+    /// document; like `put_*`, it reaches SQLite on the next `save`.
+    /// Returns the handle; the removed count is not part of the surface.
+    pub fn open_typed_doc_at(&self, id: String, kind: DocKind, now: String) -> Result<u64, CoreError> {
+        let clock = docs::parse_rfc3339_utc(&now).ok_or_else(|| CoreError::InvalidTimestamp(now.clone()))?;
+        self.open_typed_doc_inner(id, kind, Some(clock))
     }
 
     /// Typed read: hydrate the whole profile document across the boundary.
@@ -235,6 +246,28 @@ impl Core {
         })
     }
 
+    /// Shared open path (Run 33 body, unchanged) plus the Run 35 cleanup
+    /// step, which runs only when a clock is supplied and the kind is Pings.
+    fn open_typed_doc_inner(&self, id: String, kind: DocKind, now: Option<docs::UtcInstant>) -> Result<u64, CoreError> {
+        let mut doc = match self.store.read(&id).map_err(|e| CoreError::Storage(e.to_string()))? {
+            Some(bytes) => automerge::AutoCommit::load(&bytes).map_err(|e| CoreError::Automerge(e.to_string()))?,
+            None => {
+                let mut d = automerge::AutoCommit::new();
+                let r = match kind {
+                    DocKind::Profile => reconcile(&mut d, &ProfileDoc::default()),
+                    DocKind::Pings => reconcile(&mut d, &PingsDoc::default()),
+                    DocKind::Threads => reconcile(&mut d, &ThreadsDoc::default()),
+                };
+                r.map_err(|e| CoreError::Automerge(e.to_string()))?;
+                d
+            }
+        };
+        if let (DocKind::Pings, Some(clock)) = (kind, now) {
+            remove_expired_pings(&mut doc, clock).map_err(CoreError::Automerge)?;
+        }
+        Ok(self.insert(Open { id, doc }))
+    }
+
     fn insert(&self, o: Open) -> u64 {
         let mut n = self.next.lock().unwrap();
         let h = *n;
@@ -247,6 +280,53 @@ impl Core {
         let o = m.get_mut(&handle).ok_or(CoreError::NoSuchHandle(handle))?;
         f(o)
     }
+}
+
+/// Run 35 — the cleanup-on-load step. Walks `channels` → each channel list
+/// → each ping's `expires_at` and deletes expired entries in place with
+/// Automerge list deletes (not a whole-document reconcile), so the op
+/// history records exactly the removals — the property that matters once
+/// 1b sync arrives. Anything not shaped as `PingsDoc` (a missing
+/// `channels` map, a non-list channel, a ping without a string
+/// `expires_at`) is left untouched rather than errored: the shape is not
+/// re-validated on open (Run 33 rule — the doc id is the shell's contract).
+/// Returns the number of pings removed.
+fn remove_expired_pings(doc: &mut automerge::AutoCommit, now: docs::UtcInstant) -> Result<u64, String> {
+    use automerge::{transaction::Transactable, ReadDoc, Value, ROOT};
+    let Some((Value::Object(automerge::ObjType::Map), channels)) =
+        doc.get(ROOT, "channels").map_err(|e| e.to_string())?
+    else {
+        return Ok(0);
+    };
+    let channel_ids: Vec<String> = doc.keys(&channels).collect();
+    let mut removed = 0u64;
+    for ch in channel_ids {
+        let Some((Value::Object(automerge::ObjType::List), list)) =
+            doc.get(&channels, ch.as_str()).map_err(|e| e.to_string())?
+        else {
+            continue;
+        };
+        // walk from the end so deletes do not shift the indices still to visit
+        for idx in (0..doc.length(&list)).rev() {
+            let Some((Value::Object(automerge::ObjType::Map), ping)) =
+                doc.get(&list, idx).map_err(|e| e.to_string())?
+            else {
+                continue;
+            };
+            let expires_at = match doc.get(&ping, "expires_at").map_err(|e| e.to_string())? {
+                Some((Value::Scalar(v), _)) => match v.as_ref() {
+                    automerge::ScalarValue::Str(s) => s.to_string(),
+                    _ => continue,
+                },
+                _ => continue,
+            };
+            if docs::ping_expiry(&expires_at, now) == Some(true) {
+                doc.delete(&list, idx).map_err(|e| e.to_string())?;
+                removed += 1;
+            }
+        }
+    }
+    Ok(removed)
 }
 
 // B3 — force the pin to link, without creating any Keyhive object.
@@ -532,6 +612,125 @@ mod tests {
         let got = core.get_pings(h).unwrap();
         assert_eq!(got, want);
         assert_eq!(got.channels["ch-local-first"].len(), 2, "expired ping returned as stored — filtering is the shell's");
+    }
+
+    // ------------------------------------------------------------------
+    // Run 35 — cleanup-on-load (1a hardening; closes the Run 33 §4.4
+    // deferral). Clock always injected; nothing below reads the wall.
+    // ------------------------------------------------------------------
+
+    fn ping(id: &str, expires_at: &str) -> docs::Ping {
+        docs::Ping {
+            ping_id: id.into(),
+            ping_type: "here".into(),
+            sender_id: "contact-1".into(),
+            sent_at: "2026-09-22T00:00:00Z".into(),
+            expires_at: expires_at.into(),
+            content: None,
+        }
+    }
+
+    /// Seeds a pings doc under `id` with one expired, one active and one
+    /// unparseable-expiry ping in `ch-a`, plus one active ping in `ch-b`,
+    /// and saves it. Returns the path.
+    fn seed_pings(dir: &tempfile::TempDir, file: &str) -> String {
+        let path = dir.path().join(file).to_string_lossy().to_string();
+        let mut channels = HashMap::new();
+        channels.insert(
+            "ch-a".into(),
+            vec![
+                ping("expired", "2026-09-22T11:59:59Z"),
+                ping("active", "2026-09-29T12:00:00Z"),
+                ping("garbled", "next tuesday"),
+            ],
+        );
+        channels.insert("ch-b".into(), vec![ping("active-b", "2026-09-23T12:00:00.500Z")]);
+        let core = init_core(path.clone()).unwrap();
+        let h = core.open_typed_doc("pings".into(), DocKind::Pings).unwrap();
+        core.put_pings(h, docs::PingsDoc { channels }).unwrap();
+        core.save(h).unwrap();
+        path
+    }
+
+    fn ids(doc: &docs::PingsDoc, ch: &str) -> Vec<String> {
+        doc.channels[ch].iter().map(|p| p.ping_id.clone()).collect()
+    }
+
+    /// Run 35 done-when (1–3 of 5): after `open_typed_doc_at` a seeded
+    /// expired ping is absent, an active one survives, an unparseable
+    /// `expires_at` is retained.
+    #[test]
+    fn expired_ping_removed_on_load_active_and_unparseable_retained() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = seed_pings(&dir, "run35-cleanup.sqlite");
+        let core = init_core(path).unwrap();
+        let h = core.open_typed_doc_at("pings".into(), DocKind::Pings, "2026-09-22T12:00:00Z".into()).unwrap();
+        let got = core.get_pings(h).unwrap();
+        assert_eq!(ids(&got, "ch-a"), vec!["active", "garbled"], "expired absent; active + unparseable retained, order kept");
+        assert_eq!(ids(&got, "ch-b"), vec!["active-b"]);
+        assert_eq!(got.channels["ch-a"][1].expires_at, "next tuesday", "unparseable expires_at retained verbatim");
+    }
+
+    /// The clock is the parameter, not the wall: the same stored document
+    /// yields different survivors under different injected `now` values,
+    /// and `open_typed_doc` (no clock) still returns every ping as stored.
+    #[test]
+    fn cleanup_follows_injected_clock_not_wall() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = seed_pings(&dir, "run35-clock.sqlite");
+        let core = init_core(path).unwrap();
+        // clock before every expiry: nothing removed
+        let h0 = core.open_typed_doc_at("pings".into(), DocKind::Pings, "2026-09-22T00:00:00Z".into()).unwrap();
+        assert_eq!(ids(&core.get_pings(h0).unwrap(), "ch-a"), vec!["expired", "active", "garbled"]);
+        // Kotlin-shaped fractional clock at the exact ch-b expiry: strict comparison, not expired yet
+        let h1 = core.open_typed_doc_at("pings".into(), DocKind::Pings, "2026-09-23T12:00:00.500000000Z".into()).unwrap();
+        assert_eq!(ids(&core.get_pings(h1).unwrap(), "ch-b"), vec!["active-b"]);
+        // one nanosecond past it, with an offset-form clock: expired
+        let h2 = core.open_typed_doc_at("pings".into(), DocKind::Pings, "2026-09-23T08:00:00.500000001-04:00".into()).unwrap();
+        assert!(core.get_pings(h2).unwrap().channels["ch-b"].is_empty());
+        // far future: only the unparseable one survives
+        let h3 = core.open_typed_doc_at("pings".into(), DocKind::Pings, "2030-01-01T00:00:00Z".into()).unwrap();
+        assert_eq!(ids(&core.get_pings(h3).unwrap(), "ch-a"), vec!["garbled"]);
+        // Run 33 surface unchanged: no clock, no cleanup
+        let h4 = core.open_typed_doc("pings".into(), DocKind::Pings).unwrap();
+        assert_eq!(ids(&core.get_pings(h4).unwrap(), "ch-a"), vec!["expired", "active", "garbled"]);
+    }
+
+    /// Cleanup edits the opened document; it reaches SQLite on `save`
+    /// (same contract as `put_*`), and a later plain open sees the
+    /// smaller document.
+    #[test]
+    fn cleanup_persists_on_save_and_survives_core_restart() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = seed_pings(&dir, "run35-persist.sqlite");
+        {
+            let core = init_core(path.clone()).unwrap();
+            let h = core.open_typed_doc_at("pings".into(), DocKind::Pings, "2026-09-22T12:00:00Z".into()).unwrap();
+            core.save(h).unwrap();
+        }
+        let core = init_core(path).unwrap();
+        let h = core.open_typed_doc("pings".into(), DocKind::Pings).unwrap();
+        assert_eq!(ids(&core.get_pings(h).unwrap(), "ch-a"), vec!["active", "garbled"]);
+    }
+
+    /// A clock that does not parse is an error, not a silent no-op; the
+    /// document is not opened. Non-Pings kinds validate the clock and are
+    /// otherwise untouched; a fresh Pings doc opens empty.
+    #[test]
+    fn invalid_clock_is_an_error_and_other_kinds_are_untouched() {
+        let core = Core::new(":memory:".into()).unwrap();
+        match core.open_typed_doc_at("pings".into(), DocKind::Pings, "now-ish".into()) {
+            Err(CoreError::InvalidTimestamp(s)) => assert_eq!(s, "now-ish"),
+            other => panic!("expected InvalidTimestamp, got {other:?}"),
+        }
+        assert!(matches!(
+            core.open_typed_doc_at("profile".into(), DocKind::Profile, "".into()),
+            Err(CoreError::InvalidTimestamp(_))
+        ));
+        let hp = core.open_typed_doc_at("profile".into(), DocKind::Profile, "2026-09-22T12:00:00Z".into()).unwrap();
+        assert_eq!(core.get_profile(hp).unwrap(), docs::ProfileDoc::default());
+        let hq = core.open_typed_doc_at("pings".into(), DocKind::Pings, "2026-09-22T12:00:00Z".into()).unwrap();
+        assert_eq!(core.get_pings(hq).unwrap(), docs::PingsDoc::default());
     }
 
     /// Run 33 done-when (3 of 3): threads cross the exported surface.
