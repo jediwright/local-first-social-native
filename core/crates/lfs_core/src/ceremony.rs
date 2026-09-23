@@ -50,6 +50,32 @@
 //!
 //! H3: the Keyhive document ID never crosses FFI and appears in no log
 //! path; the record carries the storage row id.
+//!
+//! Run 38 (plan v0.1.1 §9 row 4; D-38 record `1a354226…` §2, rulings
+//! CARRIED; amendment pack `473ed745…` §0 OR-1/OR-4):
+//!
+//! 6. D-38-3 / OR-1 — a THIRD delegation on the identity document: the DEVICE
+//!    key at `Edit`, issued by the primary admin (the active agent) with
+//!    `add_member` after `generate_doc` and before the heads are collected.
+//!    The device's `Individual` is introduced by contact card exactly as the
+//!    recovery key is. `admin_delegations` still counts `can == Admin` only,
+//!    so the floor count stays at two; the persisted identity row now holds
+//!    three delegations under the SAME v1 tag (same serde type; `can` is a
+//!    field). Device-seed source ruled A1 in-run: the ceremony generates the
+//!    device `MemorySigner` and its seed crosses FFI once as
+//!    `DeviceKeyExport` beside the cold keys; the seed never lands in SQLite.
+//! 7. D-38-4 / OR-4 — the admin `KeyOp`s (the primary and recovery contact
+//!    cards) plus the device's own are persisted as a second row under a NEW
+//!    tag, `storage::FORMAT_KEYHIVE_STATIC_EVENTS_V1`, as
+//!    `Vec<StaticEvent<[u8; 32]>>` (`PrekeysExpanded` variants) — the type
+//!    `ingest_unsorted_static_events` consumes, not the v1 delegation type.
+//!    Without them a device-active hive cannot resolve the two cold admin
+//!    delegates (`UnknownAgent`); with them the identity document reloads
+//!    from the two rows into a hive whose active agent is the device
+//!    (`reload_with`), which is the path Run 40's recovery re-uses with a
+//!    re-imported admin as active agent. The test
+//!    `identity_row_reloads_into_device_hive` decides whether the reload
+//!    lifts here (green) or at Run 39 (red) — OR-4.
 
 use crate::policy::{self, FloorStatus};
 use crate::storage::{self, DocStore};
@@ -65,10 +91,21 @@ use keyhive_crypto::signer::memory::MemorySigner;
 use keyhive_crypto::verifiable::Verifiable;
 use nonempty::nonempty;
 use rand::rngs::OsRng;
+// Run 38 — same crate, same rev (D-38-4 "not a new dependency"): the event
+// and id types the reload path ingests and resolves.
+use keyhive_core::contact_card::ContactCard;
+use keyhive_core::event::static_event::StaticEvent;
+use keyhive_core::principal::document::id::DocumentId;
+use keyhive_core::principal::identifier::Identifier;
+use keyhive_core::principal::individual::op::KeyOp;
 
 /// Storage row id of the persisted identity delegations. A stable, app-owned
 /// name; NOT the Keyhive document ID (H3).
 pub const IDENTITY_ROW_ID: &str = "identity";
+
+/// Run 38 — storage row id of the persisted admin/device `KeyOp`s (D-38-4).
+/// App-owned name; NOT a Keyhive identifier (H3).
+pub const IDENTITY_KEYOPS_ROW_ID: &str = "identity-keyops";
 
 /// The initial content head the identity document is generated over. Run 37
 /// binds no content to the document yet (the document's automerge content is
@@ -78,6 +115,8 @@ const INITIAL_CONTENT_HEAD: [u8; 32] = [0u8; 32];
 
 type Hive = Keyhive<Sendable, MemorySigner>;
 type StaticDelegations = Vec<Signed<StaticDelegation<[u8; 32]>>>;
+/// Run 38 — the serde type persisted under `FORMAT_KEYHIVE_STATIC_EVENTS_V1`.
+type StaticEvents = Vec<StaticEvent<[u8; 32]>>;
 
 /// Cold/admin material produced by the ceremony. Crosses FFI once; the core
 /// keeps no copy and writes none of it. Secrets are the 32-byte Ed25519
@@ -89,6 +128,19 @@ pub struct ColdKeyExport {
     pub primary_admin_fingerprint: String,
     pub recovery_secret: Vec<u8>,
     pub recovery_fingerprint: String,
+}
+
+/// Run 38 (D-38-3, device-seed source A1) — the device key material. Crosses
+/// FFI once beside `ColdKeyExport`; the core keeps the SIGNER in memory for
+/// this process (it is the active agent of the device hive behind the
+/// membership counter) and writes the seed nowhere. Custody past the FFI
+/// boundary is the shell's (spec §5.2 hardware-backed storage — an Ed25519
+/// seed under hardware-protected storage; the pin's only signer is
+/// `MemorySigner`, Run 37 §4.1).
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct DeviceKeyExport {
+    pub device_secret: Vec<u8>,
+    pub device_fingerprint: String,
 }
 
 /// What the ceremony records (plan §4 H5 done-when: "ceremony run records
@@ -109,34 +161,83 @@ pub struct IdentityCeremonyRecord {
     /// Size of the persisted bytes (for the observation log; no bytes cross).
     pub persisted_bytes: u64,
     pub cold_keys: ColdKeyExport,
+    /// Run 38 — the device key (third delegation, `Edit`), exported once.
+    pub device_key: DeviceKeyExport,
+    /// Run 38 — the row the `KeyOp`s were written under (`IDENTITY_KEYOPS_ROW_ID`).
+    pub keyops_row_id: String,
+    /// Run 38 — the app-owned tag of the `KeyOp` row.
+    pub keyops_format_tag: String,
+    /// Run 38 — size of the `KeyOp` row (observation log; no bytes cross).
+    pub keyops_persisted_bytes: u64,
+}
+
+/// Run 38 — what the ceremony hands back to the core beside the record: the
+/// device signer (retained in memory as the device hive's active agent) and
+/// the identity document's id (never crosses FFI — H3). Crate-internal.
+pub(crate) struct DeviceMaterial {
+    pub(crate) signer: MemorySigner,
+    pub(crate) identity_doc: DocumentId,
 }
 
 /// Run the ceremony against `store`. Refuses (without touching the store) if
 /// an identity row already exists — enrollment happens once; recovery and
 /// rotation are their own paths (spec §5.2/§6; Run 40).
+/// Run 38: the core now calls `run_retaining_device`; this form is kept for
+/// the Run 37 tests (test-only from Run 38).
+#[cfg(test)]
 pub(crate) fn run(store: &dyn DocStore, config: IdentityConfig) -> Result<IdentityCeremonyRecord, CoreError> {
+    run_retaining_device(store, config).map(|(record, _)| record)
+}
+
+/// Run 38 — the ceremony as the core calls it: the record for the shell plus
+/// the `DeviceMaterial` the core retains in memory (device hive active agent).
+/// `run` keeps the Run 37 signature for its callers and tests.
+pub(crate) fn run_retaining_device(
+    store: &dyn DocStore,
+    config: IdentityConfig,
+) -> Result<(IdentityCeremonyRecord, DeviceMaterial), CoreError> {
     if store.read_tagged(IDENTITY_ROW_ID).map_err(|e| CoreError::Storage(e.to_string()))?.is_some() {
         return Err(CoreError::IdentityAlreadyEnrolled);
     }
     let primary = MemorySigner::generate(&mut OsRng);
     let recovery = MemorySigner::generate(&mut OsRng);
-    enroll_with(store, config, primary, Some(recovery))
+    // Run 38 (A1): the device signer is generated here, in memory.
+    let device = MemorySigner::generate(&mut OsRng);
+    enroll_with_device(store, config, primary, Some(recovery), device)
 }
 
 /// The ceremony body, parametric on the keys so the floor path can be
 /// exercised: `recovery = None` generates a document with ONE admin
 /// delegation, which the floor refuses before anything is persisted.
+/// Run 38: test-only (the floor test); the product path is `enroll_with_device`.
+#[cfg(test)]
 pub(crate) fn enroll_with(
     store: &dyn DocStore,
     config: IdentityConfig,
     primary: MemorySigner,
     recovery: Option<MemorySigner>,
 ) -> Result<IdentityCeremonyRecord, CoreError> {
+    let device = MemorySigner::generate(&mut OsRng);
+    enroll_with_device(store, config, primary, recovery, device).map(|(record, _)| record)
+}
+
+/// Run 38 — the ceremony body with the device signer supplied (A1: generated
+/// by `run_retaining_device`; the reload test supplies its own so it can
+/// open the device hive afterwards).
+pub(crate) fn enroll_with_device(
+    store: &dyn DocStore,
+    config: IdentityConfig,
+    primary: MemorySigner,
+    recovery: Option<MemorySigner>,
+    device: MemorySigner,
+) -> Result<(IdentityCeremonyRecord, DeviceMaterial), CoreError> {
     let primary_fp = hex(&primary.verifying_key().to_bytes());
     let recovery_fp = recovery.as_ref().map(|r| hex(&r.verifying_key().to_bytes())).unwrap_or_default();
+    let device_fp = hex(&device.verifying_key().to_bytes());
 
-    let (delegations, admin_count) =
-        crate::runtime::rt().block_on(generate_identity_doc(primary.clone(), recovery.clone()))?;
+    let generated = crate::runtime::rt().block_on(generate_identity_doc(primary.clone(), recovery.clone(), device.clone()))?;
+    let (delegations, admin_count, keyops, identity_doc) =
+        (generated.delegations, generated.admin_count, generated.keyops, generated.identity_doc);
 
     // H2 — the floor is this app's policy; core enforced nothing here.
     policy::check_delegation_floor(admin_count).map_err(|v| CoreError::Policy(v.to_string()))?;
@@ -149,6 +250,17 @@ pub(crate) fn enroll_with(
     store
         .write_keyhive_static_delegations(IDENTITY_ROW_ID, &bytes)
         .map_err(|e| CoreError::Storage(e.to_string()))?;
+    // Run 38 (D-38-4): the KeyOps — public prekey material only — under the
+    // new tag, stamped inside the adapter (H1). Every op verifies first.
+    for ev in &keyops {
+        if let StaticEvent::PrekeysExpanded(op) = ev {
+            op.try_verify().map_err(|e| CoreError::Ceremony(format!("keyop signature: {e}")))?;
+        }
+    }
+    let keyops_bytes = bincode::serialize(&keyops).map_err(|e| CoreError::Ceremony(format!("encode keyops: {e}")))?;
+    store
+        .write_keyhive_static_events(IDENTITY_KEYOPS_ROW_ID, &keyops_bytes)
+        .map_err(|e| CoreError::Storage(e.to_string()))?;
 
     let cold_keys = ColdKeyExport {
         primary_admin_secret: primary.0.to_bytes().to_vec(),
@@ -156,7 +268,7 @@ pub(crate) fn enroll_with(
         recovery_secret: recovery.map(|r| r.0.to_bytes().to_vec()).unwrap_or_default(),
         recovery_fingerprint: recovery_fp,
     };
-    Ok(IdentityCeremonyRecord {
+    let record = IdentityCeremonyRecord {
         identity_row_id: IDENTITY_ROW_ID.to_string(),
         rooting_level: config.rooting_level,
         floor_status: policy::delegation_floor_status(config.rooting_level),
@@ -164,7 +276,20 @@ pub(crate) fn enroll_with(
         format_tag: storage::FORMAT_KEYHIVE_STATIC_DELEGATIONS_V1.to_string(),
         persisted_bytes: bytes.len() as u64,
         cold_keys,
-    })
+        device_key: DeviceKeyExport { device_secret: device.0.to_bytes().to_vec(), device_fingerprint: device_fp },
+        keyops_row_id: IDENTITY_KEYOPS_ROW_ID.to_string(),
+        keyops_format_tag: storage::FORMAT_KEYHIVE_STATIC_EVENTS_V1.to_string(),
+        keyops_persisted_bytes: keyops_bytes.len() as u64,
+    };
+    Ok((record, DeviceMaterial { signer: device, identity_doc }))
+}
+
+/// Run 38 — what the Keyhive half returns.
+struct Generated {
+    delegations: StaticDelegations,
+    admin_count: usize,
+    keyops: StaticEvents,
+    identity_doc: DocumentId,
 }
 
 /// The Keyhive half: an in-memory hive whose active agent is the primary
@@ -172,14 +297,21 @@ pub(crate) fn enroll_with(
 /// card (the pinned crate's only path to register a peer) and named as
 /// co-parent of the new document. Returns the document's delegation heads in
 /// static form plus the number of them that grant `Admin`.
+/// Run 38: also the device's individual (same contact-card path), which the
+/// primary admin then delegates at `Edit` on the new document (D-38-3); and
+/// the three `KeyOp`s as `PrekeysExpanded` static events (D-38-4).
 async fn generate_identity_doc(
     primary: MemorySigner,
     recovery: Option<MemorySigner>,
-) -> Result<(StaticDelegations, usize), CoreError> {
+    device: MemorySigner,
+) -> Result<Generated, CoreError> {
     let cer = |e: &dyn std::fmt::Debug| CoreError::Ceremony(format!("{e:?}"));
     let admin_hive: Hive = Keyhive::generate(primary, MemoryCiphertextStore::new(), NoListener, OsRng)
         .await
         .map_err(|e| cer(&e))?;
+    let mut keyops: StaticEvents = Vec::new();
+    let primary_card = admin_hive.generate_contact_card().await.map_err(|e| cer(&e))?;
+    keyops.push(keyop_event(&primary_card));
 
     let mut coparents = Vec::new();
     if let Some(recovery) = recovery {
@@ -189,10 +321,26 @@ async fn generate_identity_doc(
         let card = recovery_hive.generate_contact_card().await.map_err(|e| cer(&e))?;
         let recovery_id = admin_hive.receive_contact_card(&card).await.map_err(|e| cer(&e))?;
         coparents.push(recovery_id.into());
+        keyops.push(keyop_event(&card));
     }
+
+    // Run 38 (D-38-3): the device's individual, introduced the same way.
+    let device_hive: Hive = Keyhive::generate(device, MemoryCiphertextStore::new(), NoListener, OsRng)
+        .await
+        .map_err(|e| cer(&e))?;
+    let device_card = device_hive.generate_contact_card().await.map_err(|e| cer(&e))?;
+    let device_id = admin_hive.receive_contact_card(&device_card).await.map_err(|e| cer(&e))?;
+    keyops.push(keyop_event(&device_card));
 
     let doc_id = admin_hive
         .generate_doc(coparents, nonempty![INITIAL_CONTENT_HEAD])
+        .await
+        .map_err(|e| cer(&e))?;
+    // Run 38 (D-38-3 / OR-1): third delegation — device at `Edit`, issued by
+    // the primary admin (active agent), after generate_doc, before the heads
+    // are collected. Admin count is unaffected (`can == Admin` only).
+    admin_hive
+        .add_member(device_id, doc_id, Access::Edit, &[])
         .await
         .map_err(|e| cer(&e))?;
     let doc = admin_hive.get_document(doc_id).await.ok_or_else(|| CoreError::Ceremony("document vanished".into()))?;
@@ -200,24 +348,112 @@ async fn generate_identity_doc(
 
     let mut statics: StaticDelegations = Vec::new();
     let mut admin_count = 0usize;
-    for signed in doc.delegation_heads().values() {
-        if signed.payload().can() == Access::Admin {
+    // Run 38 FINDING (against D-38 record §1 (iii)-8 as read): once the
+    // primary admin issues the device delegation, its own root delegation is
+    // the device's PROOF and is no longer a HEAD — `delegation_heads()` drops
+    // to two (recovery Admin + device Edit) and the floor would read ONE
+    // Admin. The membership map keeps every delegation, so the row and the
+    // count are taken from `members()`: all delegations (three: two Admin
+    // roots + the device Edit, whose proof is the primary's root), and the
+    // Admin count = members whose highest capability is Admin (still two).
+    // Reload needs the proof delegation in the row anyway.
+    for (member, delegations) in doc.members() {
+        if doc.get_capability(member).map(|d| d.payload().can()) == Some(Access::Admin) {
             admin_count += 1;
         }
-        let s: Signed<StaticDelegation<[u8; 32]>> = (**signed).clone().map(StaticDelegation::from);
-        statics.push(s);
+        for signed in delegations.iter() {
+            let s: Signed<StaticDelegation<[u8; 32]>> = (**signed).clone().map(StaticDelegation::from);
+            statics.push(s);
+        }
     }
     // Deterministic order for byte-stable rows: by delegate identifier bytes.
     statics.sort_by(|a, b| a.payload().delegate.to_bytes().cmp(&b.payload().delegate.to_bytes()));
-    Ok((statics, admin_count))
+    Ok(Generated { delegations: statics, admin_count, keyops, identity_doc: doc_id })
+}
+
+/// Run 38 — a contact card is a `KeyOp`; the reload path ingests it as the
+/// `PrekeysExpanded` static event (the card's op is always the add-key op).
+pub(crate) fn keyop_event(card: &ContactCard) -> StaticEvent<[u8; 32]> {
+    match card.op() {
+        KeyOp::Add(add) => StaticEvent::PrekeysExpanded(Box::new((**add).clone())),
+        KeyOp::Rotate(rot) => StaticEvent::PrekeyRotated(Box::new((**rot).clone())),
+    }
+}
+
+/// Run 38 (D-38-4 / OR-4) — rebuild the identity document inside a hive whose
+/// active agent is `signer` (the device key today; a re-imported cold admin
+/// at Run 40), from the two persisted rows and no other signer. Ingests the
+/// `KeyOp`s first (so the cold delegates resolve), then the delegations; the
+/// fixed-point ingest leaves nothing pending when the rows suffice. Returns
+/// the hive and the identity document's id (never crosses FFI — H3).
+pub(crate) fn reload_with(store: &dyn DocStore, signer: MemorySigner) -> Result<(Hive, DocumentId), CoreError> {
+    let (tag, bytes) = store
+        .read_tagged(IDENTITY_ROW_ID)
+        .map_err(|e| CoreError::Storage(e.to_string()))?
+        .ok_or_else(|| CoreError::Ceremony("no identity row".into()))?;
+    if tag != storage::FORMAT_KEYHIVE_STATIC_DELEGATIONS_V1 {
+        return Err(CoreError::Ceremony(format!("identity row under unexpected tag {tag}")));
+    }
+    let (ktag, kbytes) = store
+        .read_tagged(IDENTITY_KEYOPS_ROW_ID)
+        .map_err(|e| CoreError::Storage(e.to_string()))?
+        .ok_or_else(|| CoreError::Ceremony("no identity keyops row".into()))?;
+    if ktag != storage::FORMAT_KEYHIVE_STATIC_EVENTS_V1 {
+        return Err(CoreError::Ceremony(format!("keyops row under unexpected tag {ktag}")));
+    }
+    let delegations = decode(&bytes)?;
+    let keyops = decode_events(&kbytes)?;
+    crate::runtime::rt().block_on(reload_into(signer, keyops, delegations))
+}
+
+async fn reload_into(
+    signer: MemorySigner,
+    keyops: StaticEvents,
+    delegations: StaticDelegations,
+) -> Result<(Hive, DocumentId), CoreError> {
+    let cer = |e: &dyn std::fmt::Debug| CoreError::Ceremony(format!("{e:?}"));
+    let own: Identifier = (&signer.verifying_key()).into();
+    let hive: Hive = Keyhive::generate(signer, MemoryCiphertextStore::new(), NoListener, OsRng)
+        .await
+        .map_err(|e| cer(&e))?;
+    // The identity document's id is the issuer of its root delegations (the
+    // destroyed ephemeral signer): recover it from the bytes, not from state.
+    let root_issuer = delegations
+        .iter()
+        .find(|d| d.payload().proof.is_none())
+        .map(|d| Identifier::from(d.issuer()))
+        .ok_or_else(|| CoreError::Ceremony("identity row holds no root delegation".into()))?;
+    let doc_id = DocumentId::from(root_issuer);
+    let mut events: StaticEvents = keyops
+        .into_iter()
+        // the active agent's own KeyOp is already known to its hive
+        .filter(|ev| match ev {
+            StaticEvent::PrekeysExpanded(op) => Identifier::from(op.issuer()) != own,
+            _ => true,
+        })
+        .collect();
+    events.extend(delegations.into_iter().map(StaticEvent::Delegated));
+    let pending = hive.ingest_unsorted_static_events(events).await;
+    if !pending.is_empty() {
+        return Err(CoreError::Ceremony(format!("reload left {} event(s) pending: {pending:?}", pending.len())));
+    }
+    hive.get_document(doc_id).await.ok_or_else(|| CoreError::Ceremony("identity document not materialised".into()))?;
+    Ok((hive, doc_id))
 }
 
 /// Decode a persisted identity row back into its delegations. Test-only in
 /// Run 37 (the round-trip proof); the reload path into a live hive is
 /// Run 40's work and lifts the gate then.
-#[cfg(test)]
+/// Run 38 (OR-4): the gate is lifted HERE because
+/// `identity_row_reloads_into_device_hive` is green — `reload_with` is the
+/// first product caller.
 pub(crate) fn decode(bytes: &[u8]) -> Result<StaticDelegations, CoreError> {
     bincode::deserialize(bytes).map_err(|e| CoreError::Ceremony(format!("decode: {e}")))
+}
+
+/// Run 38 — decode the persisted `KeyOp` row (`FORMAT_KEYHIVE_STATIC_EVENTS_V1`).
+pub(crate) fn decode_events(bytes: &[u8]) -> Result<StaticEvents, CoreError> {
+    bincode::deserialize(bytes).map_err(|e| CoreError::Ceremony(format!("decode keyops: {e}")))
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -280,19 +516,72 @@ mod tests {
         assert_eq!(tag, storage::FORMAT_KEYHIVE_STATIC_DELEGATIONS_V1);
         assert_eq!(bytes.len() as u64, rec.persisted_bytes);
         let dels = decode(&bytes).unwrap();
-        assert_eq!(dels.len(), 2);
+        // Run 38 (D-38-3; record §3(c)-6, the ONE named test-line edit of the
+        // run): three delegations — two Admin root edges (no proof) plus the
+        // device at Edit, issued by the primary admin with a proof.
+        assert_eq!(dels.len(), 3);
         let mut delegates = Vec::new();
+        let mut admin_delegates = Vec::new();
+        let mut device_delegates = Vec::new();
         for d in &dels {
             d.try_verify().expect("persisted delegation verifies");
-            assert_eq!(d.payload().can, Access::Admin);
-            assert!(d.payload().proof.is_none(), "root edge: delegated by the ephemeral root, no proof");
+            match d.payload().can {
+                Access::Admin => {
+                    assert!(d.payload().proof.is_none(), "root edge: delegated by the ephemeral root, no proof");
+                    admin_delegates.push(hex(&d.payload().delegate.to_bytes()));
+                }
+                Access::Edit => {
+                    assert!(d.payload().proof.is_some(), "device edge: delegated by the primary admin, with proof");
+                    assert_eq!(hex(&d.issuer().to_bytes()), rec.cold_keys.primary_admin_fingerprint, "issued by the primary admin");
+                    device_delegates.push(hex(&d.payload().delegate.to_bytes()));
+                }
+                other => panic!("unexpected level on the identity document: {other:?}"),
+            }
             delegates.push(hex(&d.payload().delegate.to_bytes()));
         }
-        let issuers: std::collections::BTreeSet<_> = dels.iter().map(|d| d.issuer().to_bytes()).collect();
-        assert_eq!(issuers.len(), 1, "both delegations issued by the one ephemeral root key");
+        let issuers: std::collections::BTreeSet<_> =
+            dels.iter().filter(|d| d.payload().can == Access::Admin).map(|d| d.issuer().to_bytes()).collect();
+        assert_eq!(issuers.len(), 1, "both admin delegations issued by the one ephemeral root key");
         let mut want = vec![rec.cold_keys.primary_admin_fingerprint.clone(), rec.cold_keys.recovery_fingerprint.clone()];
         want.sort();
-        assert_eq!(delegates, want, "delegates are the two cold keys");
+        admin_delegates.sort();
+        assert_eq!(admin_delegates, want, "admin delegates are the two cold keys");
+        assert_eq!(device_delegates, vec![rec.device_key.device_fingerprint.clone()], "the Edit delegate is the device key");
+        assert_eq!(rec.admin_delegations, 2, "the floor count is unaffected by the device delegation");
+    }
+
+    /// Run 38 — D-38-4 / OR-4: the test that decides the reload timing.
+    /// Run the ceremony with a retained device signer; open a FRESH hive whose
+    /// active agent is the device; ingest the persisted KeyOps + delegations;
+    /// nothing pending, the document materialises, three members, device at
+    /// Edit, admins at Admin.
+    #[test]
+    fn identity_row_reloads_into_device_hive() {
+        let dir = tempfile::tempdir().unwrap();
+        let (_, s) = store(&dir, "c7.sqlite");
+        let primary = MemorySigner::generate(&mut OsRng);
+        let recovery = MemorySigner::generate(&mut OsRng);
+        let device = MemorySigner::generate(&mut OsRng);
+        let (rec, material) =
+            enroll_with_device(&s, IdentityConfig { rooting_level: RootingLevel::Edit }, primary.clone(), Some(recovery.clone()), device.clone())
+                .unwrap();
+        assert_eq!(rec.keyops_format_tag, storage::FORMAT_KEYHIVE_STATIC_EVENTS_V1);
+        assert_eq!(s.read_tagged(IDENTITY_KEYOPS_ROW_ID).unwrap().unwrap().0, storage::FORMAT_KEYHIVE_STATIC_EVENTS_V1);
+
+        let (hive, doc_id) = reload_with(&s, device.clone()).expect("reload from the two rows, no admin signer");
+        assert_eq!(doc_id, material.identity_doc, "the identity document id is recovered from the root issuer");
+        crate::runtime::rt().block_on(async {
+            let doc = hive.get_document(doc_id).await.expect("identity document materialised");
+            let doc = doc.lock().await;
+            assert_eq!(doc.members().len(), 3, "primary admin + recovery + device");
+            let level = |signer: &MemorySigner| {
+                let id: Identifier = (&signer.verifying_key()).into();
+                doc.get_capability(&id).map(|d| d.payload().can())
+            };
+            assert_eq!(level(&device), Some(Access::Edit));
+            assert_eq!(level(&primary), Some(Access::Admin));
+            assert_eq!(level(&recovery), Some(Access::Admin));
+        });
     }
 
     /// Plan §9 row 3 done-when (3): cold key off-device — the exported seeds

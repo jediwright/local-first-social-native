@@ -26,6 +26,15 @@ pub const FORMAT_AUTOMERGE_SAVE_V1: &str = "automerge.save.v1";
 /// Consumer Evidence Note v1 measures against.
 pub const FORMAT_KEYHIVE_STATIC_DELEGATIONS_V1: &str = "keyhive.static-delegations.bincode.v1";
 
+/// Run 38 (D-38-4; tag value RULED in-run under Task 2 (iv)) — the second
+/// Keyhive row: `bincode` over `Vec<keyhive_core::event::static_event::
+/// StaticEvent<[u8; 32]>>` at `90fe4a51`, holding the identity ceremony's
+/// admin and device `KeyOp`s as `PrekeysExpanded` events — public prekey
+/// material only, the exact type `ingest_unsorted_static_events` consumes.
+/// NOT the v1 delegation type (a different serde enum), so a NEW value;
+/// `.v1` names THAT shape; same never-re-tag rule as the delegation tag.
+pub const FORMAT_KEYHIVE_STATIC_EVENTS_V1: &str = "keyhive.static-events.bincode.v1";
+
 /// Run 36 H1 housekeeping (flagged at Run 30): the Keyhive pin label shown in
 /// `Core::pins()` lives with the adapter that owns the Keyhive bytes.
 /// Run 37 RE-RULED the display string alongside the first format tag: the
@@ -54,6 +63,9 @@ pub trait DocStore: Send + Sync {
     /// HERE, never threaded through callers (H1: one adapter owns every
     /// persisted Keyhive byte and its tag). Upsert like `write`.
     fn write_keyhive_static_delegations(&self, id: &str, bytes: &[u8]) -> rusqlite::Result<()>;
+    /// Run 38 — write Keyhive static-event bytes (the `KeyOp` row). Tag
+    /// stamped HERE (H1), same upsert as the other writes. Additive.
+    fn write_keyhive_static_events(&self, id: &str, bytes: &[u8]) -> rusqlite::Result<()>;
 }
 
 pub struct SqliteStore {
@@ -107,6 +119,9 @@ impl DocStore for SqliteStore {
     }
     fn write_keyhive_static_delegations(&self, id: &str, bytes: &[u8]) -> rusqlite::Result<()> {
         self.upsert(id, FORMAT_KEYHIVE_STATIC_DELEGATIONS_V1, bytes)
+    }
+    fn write_keyhive_static_events(&self, id: &str, bytes: &[u8]) -> rusqlite::Result<()> {
+        self.upsert(id, FORMAT_KEYHIVE_STATIC_EVENTS_V1, bytes)
     }
 }
 

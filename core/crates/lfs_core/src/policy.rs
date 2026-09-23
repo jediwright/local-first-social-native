@@ -9,6 +9,11 @@
 //! (plan §4 H2, v0.1.1 "named policy module" clause). Nothing in this file
 //! calls into `keyhive_core`; the mirrored level vocabulary below is a
 //! deliberate copy, not an import.
+//! Run 38 (D-38 record §1 (ii)-5, source read at `90fe4a51`): the pinned core has
+//! NO `>= Admin` delegating rule for `add_member` to move — it refuses escalation
+//! (`can > held`) and nothing else. The grant bar below is consumer policy already;
+//! it runs BEFORE any `keyhive_core` call, so a below-Admin grant is refused here
+//! with core never invoked and nothing written (plan §9 row 4 done-when).
 //!
 //! Skeleton only (plan §9 row 2). The two rules are NAMED as types and
 //! functions; nothing calls them yet. Run 37 (identity ceremony) is the first
@@ -38,7 +43,10 @@ pub const DELEGATION_FLOOR: usize = 2;
 /// dependency on core's type so a core-side rename or bar move is absorbed
 /// by this file alone. The mapping from a live Keyhive capability to a
 /// `GrantLevel` is Run 38's work (the first run that holds Keyhive groups).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// Run 38: the mapping is 1:1 with `Access` at `90fe4a51` (Relay/Read/Edit/Admin)
+/// and lives in the hive-holding module, not here (H2). `GrantLevel` crosses FFI
+/// from Run 38 as a `uniffi::Enum` (D-38-2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, uniffi::Enum)]
 pub enum GrantLevel {
     Relay,
     Read,
@@ -95,6 +103,8 @@ pub fn check_grant_bar(granter: GrantLevel) -> Result<(), PolicyViolation> {
 /// Run 37: crosses FFI (`uniffi::Enum`) as a field of the ceremony record —
 /// the shell receives the L-12 citation with the configured level.
 /// `GrantLevel` does NOT cross FFI (Run 38 rules that with the bar).
+/// Run 38 ruled it (D-38-2): `GrantLevel` DOES cross FFI from Run 38 — the
+/// line above is discharged, kept verbatim (Run 35 rule: append, never edit).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum FloorStatus {
     /// Edit-rooting: a compromised recovery key is evicted by the retained

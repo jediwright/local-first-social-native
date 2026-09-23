@@ -4,6 +4,7 @@ uniffi::setup_scaffolding!();
 
 pub mod ceremony;
 pub mod docs;
+pub mod groups;
 pub mod policy;
 pub mod resolve;
 pub(crate) mod runtime;
@@ -42,6 +43,11 @@ pub enum CoreError {
     /// Run 37 — an identity row already exists; enrollment happens once.
     #[error("identity already enrolled")]
     IdentityAlreadyEnrolled,
+    /// Run 38 — a Keyhive group/membership operation failed (group creation,
+    /// peer registration, or `add_member` after the bar passed). Never raised
+    /// for a policy refusal (that is `Policy`).
+    #[error("membership: {0}")]
+    Membership(String),
 }
 
 /// The Phase 0 round-trip shape. Run 32 decision: KEPT, not retired — it
@@ -107,11 +113,12 @@ pub struct Core {
     store: Box<dyn DocStore>,
     open: Mutex<HashMap<u64, Open>>,
     next: Mutex<u64>,
-    /// Run 32 — membership-version counter state (plan §1 1a: interface
-    /// only, no Keyhive backend). In-memory by design: the counter is the
-    /// seam 1b's real membership events will drive; nothing here is a
-    /// persistence ruling.
-    membership: Mutex<HashMap<String, u64>>,
+    /// Run 38 — the device hive behind the membership counter (Run 32's
+    /// in-memory `membership` map is retired: the counter now reads Keyhive
+    /// group membership — `groups` module docs). Lazily a session-only hive
+    /// until the identity ceremony runs in this process (then rebuilt from
+    /// the persisted rows). In-memory: group persistence is Run 39's.
+    device: Mutex<Option<groups::DeviceHive>>,
 }
 
 /// Run 30 — the explicit FFI init entry point (Run 27 lifecycle contract).
@@ -250,19 +257,47 @@ impl Core {
     /// "Counter increments on membership event; interface in place").
     /// Interface only: no Keyhive backend; 1b backs this with Keyhive
     /// group membership. Version 0 = no membership event seen for the group.
+    /// Run 38: backed by Keyhive group membership (plan §9 row 4) — the
+    /// version is the group's member count minus the device's own root
+    /// membership; 0 when no group exists under `group_id`.
     pub fn membership_version(&self, group_id: String) -> u64 {
-        *self.membership.lock().unwrap().get(&group_id).unwrap_or(&0)
+        self.device.lock().unwrap().as_ref().map(|d| d.membership_version(&group_id)).unwrap_or(0)
     }
 
     /// Run 32 — membership-version counter, event side. Records one
     /// (simulated) membership event for `group_id` and returns the new
     /// version. 1b replaces the simulation with real Keyhive membership
     /// events driving the same interface; the signature is the seam.
+    /// Run 38: a real Keyhive membership event — the device creates the group
+    /// on first use (device = Admin) and grants one simulated peer at `Read`
+    /// through the H2 bar (`groups` module docs). The signature is unchanged
+    /// (the seam); an event that fails to land leaves the version unchanged
+    /// and the typed, error-bearing form is `grant_member`.
     pub fn record_membership_event(&self, group_id: String) -> u64 {
-        let mut m = self.membership.lock().unwrap();
-        let v = m.entry(group_id).or_insert(0);
-        *v += 1;
-        *v
+        match self.grant_member(group_id.clone(), policy::GrantLevel::Read) {
+            Ok(v) => v,
+            Err(_) => self.membership_version(group_id),
+        }
+    }
+
+    /// Run 38 — the typed membership event: grant one simulated peer at
+    /// `level` on the group named `group_id` (created by the device on first
+    /// use), through the H2 grant bar (`policy::check_grant_bar`, first
+    /// caller; a below-Admin granter is refused as `CoreError::Policy` before
+    /// core is invoked). Returns the new membership version. Blocking;
+    /// dispatch off-main like the ceremony.
+    pub fn grant_member(&self, group_id: String, level: policy::GrantLevel) -> Result<u64, CoreError> {
+        let mut guard = self.device.lock().unwrap();
+        if guard.is_none() {
+            *guard = Some(groups::DeviceHive::session_only()?);
+        }
+        guard.as_mut().expect("device hive present").record_membership_event(&group_id, level)
+    }
+
+    /// Run 38 — the device's own grant level on the group named `group_id`
+    /// (`Admin` on every group it created), or `None` when no such group.
+    pub fn device_grant_level(&self, group_id: String) -> Option<policy::GrantLevel> {
+        self.device.lock().unwrap().as_ref().and_then(|d| d.device_grant_level(&group_id))
     }
 
     /// Run 37 — the identity ceremony (plan §9 row 3; `ceremony` module docs).
@@ -272,8 +307,15 @@ impl Core {
     /// Keyhive format tag, and returns the cold material once. Blocking;
     /// shells dispatch it off-main like `init_core`. Refuses a second
     /// enrollment (`IdentityAlreadyEnrolled`).
+    /// Run 38: also enrolls the device (third delegation, `Edit`), persists the
+    /// admin/device `KeyOp` row, and rebuilds the device hive from the two
+    /// persisted rows (D-38-4 reload path) — the hive the counter runs on
+    /// from here; groups created on a pre-ceremony session hive are dropped.
     pub fn run_identity_ceremony(&self, config: IdentityConfig) -> Result<ceremony::IdentityCeremonyRecord, CoreError> {
-        ceremony::run(self.store.as_ref(), config)
+        let (record, material) = ceremony::run_retaining_device(self.store.as_ref(), config)?;
+        let hive = groups::DeviceHive::from_ceremony(self.store.as_ref(), material)?;
+        *self.device.lock().unwrap() = Some(hive);
+        Ok(record)
     }
 
     /// Pin attestation for the observation log.
@@ -301,7 +343,7 @@ impl Core {
             store: Box::new(store),
             open: Mutex::new(HashMap::new()),
             next: Mutex::new(1),
-            membership: Mutex::new(HashMap::new()),
+            device: Mutex::new(None),
         })
     }
 
@@ -560,6 +602,30 @@ mod tests {
         assert_eq!(core.record_membership_event("group-a".into()), 2);
         assert_eq!(core.membership_version("group-a".into()), 2);
         assert_eq!(core.membership_version("group-b".into()), 0, "per-group isolation");
+    }
+
+    /// Run 38 done-when (plan §9 row 4), through the FFI surface: the Run 32
+    /// counter contract holds un-enrolled (session hive); `GrantLevel`
+    /// crosses; the ceremony replaces the session hive with the reloaded
+    /// identity hive (session groups dropped — in-memory by design); the
+    /// typed event lands through the bar on the device's own group.
+    #[test]
+    fn groups_behind_the_counter_via_ffi_surface() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("run38-groups.sqlite").to_string_lossy().to_string();
+        let core = init_core(path).unwrap();
+        assert_eq!(core.device_grant_level("g".into()), None);
+        assert_eq!(core.record_membership_event("g".into()), 1);
+        assert_eq!(core.device_grant_level("g".into()), Some(policy::GrantLevel::Admin));
+        assert_eq!(core.grant_member("g".into(), policy::GrantLevel::Edit).unwrap(), 2);
+        assert_eq!(core.membership_version("g".into()), 2);
+        let rec = core.run_identity_ceremony(IdentityConfig { rooting_level: RootingLevel::Edit }).unwrap();
+        assert_eq!(rec.admin_delegations, 2);
+        assert_eq!(rec.device_key.device_secret.len(), 32);
+        assert_eq!(rec.keyops_row_id, ceremony::IDENTITY_KEYOPS_ROW_ID);
+        assert_eq!(core.membership_version("g".into()), 0, "session-hive groups do not survive the ceremony");
+        assert_eq!(core.grant_member("g".into(), policy::GrantLevel::Read).unwrap(), 1);
+        assert_eq!(core.device_grant_level("g".into()), Some(policy::GrantLevel::Admin));
     }
 
     // ---- Run 33 done-when: each doc type crosses the FFI boundary and
@@ -880,6 +946,9 @@ mod tests {
             tags,
             vec![
                 ("identity".to_string(), storage::FORMAT_KEYHIVE_STATIC_DELEGATIONS_V1.to_string()),
+                // Run 38 (D-38-4): the KeyOp row — a SECOND test-line edit,
+                // not named in the kickoff; a direct consequence of the ruled row.
+                ("identity-keyops".to_string(), storage::FORMAT_KEYHIVE_STATIC_EVENTS_V1.to_string()),
                 ("profile".to_string(), storage::FORMAT_AUTOMERGE_SAVE_V1.to_string()),
             ]
         );
