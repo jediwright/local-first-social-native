@@ -14,6 +14,22 @@ use std::sync::Mutex;
 /// rows are never rewritten to a new tag — a tag names what the bytes ARE.
 pub const FORMAT_AUTOMERGE_SAVE_V1: &str = "automerge.save.v1";
 
+/// Run 36 H1 housekeeping (flagged at Run 30): the Keyhive pin label shown in
+/// `Core::pins()` lives with the adapter that will own the Keyhive bytes, so
+/// H1's grep (`storage` + `policy` only) holds from 1b entry. Text unchanged
+/// from Phase 0 — shells' pins footer is byte-identical. NOTE (pre-existing,
+/// not changed here): the label reads the crates.io version while the H6
+/// pin is git `90fe4a51`; the display string is re-ruled when the 1b format
+/// tag lands (Run 37), not in this housekeeping move.
+pub const PIN_LABEL_KEYHIVE_CORE: &str = "keyhive_core=0.5.0";
+
+// B3 (Phase 0) — force the pin to link, without creating any Keyhive object.
+// Relocated from lib.rs in Run 36 (H1 housekeeping); unchanged otherwise.
+#[allow(dead_code)]
+pub(crate) fn keyhive_core_linked() -> &'static str {
+    std::any::type_name::<keyhive_core::access::Access>()
+}
+
 pub trait DocStore: Send + Sync {
     fn read(&self, id: &str) -> rusqlite::Result<Option<Vec<u8>>>;
     fn write(&self, id: &str, bytes: &[u8]) -> rusqlite::Result<()>;
@@ -71,6 +87,12 @@ impl DocStore for SqliteStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// B3 link smoke, relocated from lib.rs in Run 36 (H1 housekeeping).
+    #[test]
+    fn keyhive_pin_links() {
+        assert!(keyhive_core_linked().contains("keyhive_core"));
+    }
 
     /// Run 30 done-when (plan §1): INSERT/SELECT roundtrip under the trait.
     #[test]

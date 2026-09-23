@@ -3,6 +3,7 @@
 uniffi::setup_scaffolding!();
 
 pub mod docs;
+pub mod policy;
 pub mod resolve;
 pub(crate) mod runtime;
 pub mod storage;
@@ -51,6 +52,35 @@ pub enum DocKind {
     Profile,
     Pings,
     Threads,
+}
+
+/// Run 36 (1b entry) — rooting level of the `identity` document (plan §4 H5;
+/// memo v0.1.2 §6; spec v0.1.4 L-12). NOT RULED: memo §6 names the choice
+/// and defers the ruling to after PR #230 (Keyline) merges. The level is
+/// therefore SUPPLIED BY CONFIGURATION from the shell, never a constant in
+/// Phase 1 code — there is deliberately no `Default` here. The two levels
+/// are the two the memo names; their consequences (~ per memo §6): `Admin`
+/// — the root edge grants Admin, any principal that has ever held apex
+/// Admin can permanently brick the document; `Edit` — the root edge is
+/// undeniable at Edit, a retained subject key can re-root out from under
+/// old admins. The ceremony entry point (Run 37) takes this via
+/// `IdentityConfig`, records the configured level in its log entry, and
+/// cites L-12's floor-withdrawal caveat (`policy::delegation_floor_status`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum RootingLevel {
+    Admin,
+    Edit,
+}
+
+/// Run 36 — the configuration path by which the rooting level reaches the
+/// core. Crosses FFI as a record so each shell supplies it explicitly at
+/// ceremony time (H5: "supplied by configuration, not a constant"). Held by
+/// no `Core` field and consulted by no entry point yet: Run 37 adds the
+/// ceremony entry point that accepts it. Additive to the FFI surface; the
+/// Run 35 surface is unchanged.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Record)]
+pub struct IdentityConfig {
+    pub rooting_level: RootingLevel,
 }
 
 struct Open {
@@ -223,8 +253,12 @@ impl Core {
 
     /// Pin attestation for the observation log.
     pub fn pins(&self) -> String {
+        // Run 36 H1 housekeeping (Run 30 flag): the Keyhive pin label is owned
+        // by the storage adapter (storage::PIN_LABEL_KEYHIVE_CORE); output is
+        // byte-identical to Run 35 — shells' pins footer unchanged.
         format!(
-            "keyhive_core=0.5.0 automerge=0.12 samod=0.14 autosurgeon=0.14 atrium-api=0.25 subduction={}",
+            "{} automerge=0.12 samod=0.14 autosurgeon=0.14 atrium-api=0.25 subduction={}",
+            storage::PIN_LABEL_KEYHIVE_CORE,
             if cfg!(feature = "subduction") { "21b2e6b8(declared)" } else { "off" }
         )
     }
@@ -327,12 +361,6 @@ fn remove_expired_pings(doc: &mut automerge::AutoCommit, now: docs::UtcInstant) 
         }
     }
     Ok(removed)
-}
-
-// B3 — force the pin to link, without creating any Keyhive object.
-#[allow(dead_code)]
-fn keyhive_core_linked() -> &'static str {
-    std::any::type_name::<keyhive_core::access::Access>()
 }
 
 #[cfg(test)]
@@ -790,11 +818,6 @@ mod tests {
         assert_ne!(hk, hp);
         assert_eq!(core.get(hk, "text".into()).unwrap().as_deref(), Some("hello phase 0"));
         assert_eq!(core.get_profile(hp).unwrap().identity.handle, "@jedi");
-    }
-
-    #[test]
-    fn keyhive_pin_links() {
-        assert!(keyhive_core_linked().contains("keyhive_core"));
     }
 
     /// B2 — samod is constructed (repo layer), not just declared. In-memory storage; no peers.
