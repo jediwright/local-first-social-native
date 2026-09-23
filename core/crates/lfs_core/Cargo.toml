@@ -23,6 +23,13 @@ samod       = { version = "0.14", features = ["tokio"] }
 rusqlite = { version = "0.40", features = ["bundled"] }
 # B3 - pin only; no Keyhive object is created in Phase 0 (L-4, L-12)
 keyhive_core = { git = "https://github.com/inkandswitch/keyhive", rev = "90fe4a51" }
+# Run 37 (identity ceremony) — companion crates keyhive_core does not re-export;
+# zero new packages (all already locked as keyhive_core transitives); ruled in-run.
+keyhive_crypto = { git = "https://github.com/inkandswitch/keyhive", rev = "90fe4a51" }
+future_form = "0.3.1"
+rand = "0.8"
+nonempty = "0.10"
+bincode = "1.3"
 # B4 - declared; one DID->PDS resolve (no writes)
 # TLS: rustls, not native-tls (Run 13 defect 4: native-tls -> openssl-sys has no aarch64-linux-android
 # sysroot). webpki roots for Phase 0; platform verifier is a Phase 1 pre-decision.

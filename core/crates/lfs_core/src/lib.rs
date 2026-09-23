@@ -2,6 +2,7 @@
 //! API surface is exactly the plan's B1 list. No delegation-level concept exists here (L-12 interim).
 uniffi::setup_scaffolding!();
 
+pub mod ceremony;
 pub mod docs;
 pub mod policy;
 pub mod resolve;
@@ -30,6 +31,17 @@ pub enum CoreError {
     /// this one).
     #[error("invalid timestamp: {0}")]
     InvalidTimestamp(String),
+    /// Run 37 — a consumer-policy refusal (`policy::PolicyViolation` text).
+    /// Ruled for the delegation floor; the grant bar reuses it in Run 38.
+    #[error("policy: {0}")]
+    Policy(String),
+    /// Run 37 — the identity ceremony could not complete (Keyhive-side
+    /// failure, signature, or encoding). Never raised for a policy refusal.
+    #[error("ceremony: {0}")]
+    Ceremony(String),
+    /// Run 37 — an identity row already exists; enrollment happens once.
+    #[error("identity already enrolled")]
+    IdentityAlreadyEnrolled,
 }
 
 /// The Phase 0 round-trip shape. Run 32 decision: KEPT, not retired — it
@@ -78,6 +90,8 @@ pub enum RootingLevel {
 /// no `Core` field and consulted by no entry point yet: Run 37 adds the
 /// ceremony entry point that accepts it. Additive to the FFI surface; the
 /// Run 35 surface is unchanged.
+/// Run 37: that entry point is `Core::run_identity_ceremony`; the record
+/// crosses FFI unchanged (bindings additions-only, Run 35 docstring rule).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Record)]
 pub struct IdentityConfig {
     pub rooting_level: RootingLevel,
@@ -251,11 +265,22 @@ impl Core {
         *v
     }
 
+    /// Run 37 — the identity ceremony (plan §9 row 3; `ceremony` module docs).
+    /// Takes the rooting level as configuration (H5), creates the `identity`
+    /// document with two admin delegations, enforces the floor as consumer
+    /// policy (H2), persists the delegation proof bytes under the first
+    /// Keyhive format tag, and returns the cold material once. Blocking;
+    /// shells dispatch it off-main like `init_core`. Refuses a second
+    /// enrollment (`IdentityAlreadyEnrolled`).
+    pub fn run_identity_ceremony(&self, config: IdentityConfig) -> Result<ceremony::IdentityCeremonyRecord, CoreError> {
+        ceremony::run(self.store.as_ref(), config)
+    }
+
     /// Pin attestation for the observation log.
     pub fn pins(&self) -> String {
         // Run 36 H1 housekeeping (Run 30 flag): the Keyhive pin label is owned
-        // by the storage adapter (storage::PIN_LABEL_KEYHIVE_CORE); output is
-        // byte-identical to Run 35 — shells' pins footer unchanged.
+        // by the storage adapter (storage::PIN_LABEL_KEYHIVE_CORE). Run 37
+        // re-ruled its text (version + git rev) — shells' footer changes.
         format!(
             "{} automerge=0.12 samod=0.14 autosurgeon=0.14 atrium-api=0.25 subduction={}",
             storage::PIN_LABEL_KEYHIVE_CORE,
@@ -818,6 +843,48 @@ mod tests {
         assert_ne!(hk, hp);
         assert_eq!(core.get(hk, "text".into()).unwrap().as_deref(), Some("hello phase 0"));
         assert_eq!(core.get_profile(hp).unwrap().identity.handle, "@jedi");
+    }
+
+    /// Run 37 — the ceremony crosses the exported surface through `init_core`
+    /// (the path both shells call): record fields populated, the identity row
+    /// survives a core restart under its tag, the Automerge rows are untouched.
+    #[test]
+    fn identity_ceremony_via_ffi_surface_persists_and_survives_restart() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("run37-ceremony.sqlite").to_string_lossy().to_string();
+        let rec = {
+            let core = init_core(path.clone()).unwrap();
+            let hp = core.open_typed_doc("profile".into(), DocKind::Profile).unwrap();
+            core.put_profile(hp, sample_profile()).unwrap();
+            core.save(hp).unwrap();
+            core.run_identity_ceremony(IdentityConfig { rooting_level: RootingLevel::Edit }).unwrap()
+        };
+        assert_eq!(rec.admin_delegations, 2);
+        assert_eq!(rec.floor_status, policy::FloorStatus::Safe);
+        let core = init_core(path.clone()).unwrap();
+        assert!(matches!(
+            core.run_identity_ceremony(IdentityConfig { rooting_level: RootingLevel::Edit }),
+            Err(CoreError::IdentityAlreadyEnrolled)
+        ));
+        let hp = core.open_typed_doc("profile".into(), DocKind::Profile).unwrap();
+        assert_eq!(core.get_profile(hp).unwrap().identity.handle, "@jedi", "automerge row untouched");
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        let tags: Vec<(String, String)> = conn
+            .prepare("SELECT id, format FROM docs ORDER BY id")
+            .unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect();
+        assert_eq!(
+            tags,
+            vec![
+                ("identity".to_string(), storage::FORMAT_KEYHIVE_STATIC_DELEGATIONS_V1.to_string()),
+                ("profile".to_string(), storage::FORMAT_AUTOMERGE_SAVE_V1.to_string()),
+            ]
+        );
+        assert_eq!(core.pins().split(' ').next().unwrap(), storage::PIN_LABEL_KEYHIVE_CORE);
+        assert!(storage::PIN_LABEL_KEYHIVE_CORE.ends_with("+90fe4a51"), "label carries the git rev (Run 37 re-rule)");
     }
 
     /// B2 — samod is constructed (repo layer), not just declared. In-memory storage; no peers.

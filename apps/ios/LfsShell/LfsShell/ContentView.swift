@@ -49,7 +49,8 @@ final class Shell: ObservableObject, @unchecked Sendable {
                 let core = try initCore(dbPath: path)
                 // Run 33 — open the three typed docs (defaults reconciled on first launch).
                 let ph = try core.openTypedDoc(id: "profile", kind: .profile)
-                let gh = try core.openTypedDoc(id: "pings", kind: .pings)
+                // Run 37 — pings adopt the Run 35 cleanup-on-load path: the shell supplies the clock (RFC 3339, whole-second Z).
+                let gh = try core.openTypedDocAt(id: "pings", kind: .pings, now: ISO8601DateFormatter().string(from: Date()))
                 let th = try core.openTypedDoc(id: "threads", kind: .threads)
                 let p = try core.getProfile(handle: ph)
                 let g = try core.getPings(handle: gh)

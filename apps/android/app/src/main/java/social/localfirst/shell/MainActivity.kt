@@ -95,7 +95,8 @@ class MainActivity : ComponentActivity() {
                 val h = c.openDoc("note")
                 val t = c.get(h, "text") ?: ""
                 val ph = c.openTypedDoc("profile", DocKind.PROFILE)
-                val gh = c.openTypedDoc("pings", DocKind.PINGS)
+                // Run 37 — pings adopt the Run 35 cleanup-on-load path: the shell supplies the clock (RFC 3339, Instant.toString()).
+                val gh = c.openTypedDocAt("pings", DocKind.PINGS, Instant.now().toString())
                 val th = c.openTypedDoc("threads", DocKind.THREADS)
                 val p = c.getProfile(ph)
                 val g = c.getPings(gh)

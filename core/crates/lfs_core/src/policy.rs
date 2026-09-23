@@ -50,9 +50,10 @@ pub enum GrantLevel {
 /// granter must hold for this app to accept its grant as valid consumer-side.
 pub const GRANT_BAR: GrantLevel = GrantLevel::Admin;
 
-/// A consumer-policy refusal. Not a `CoreError` variant and not an FFI type
-/// in Run 36: the policy is not yet reachable from any entry point. When
-/// Run 37/38 wire it, the mapping onto `CoreError` is ruled there.
+/// A consumer-policy refusal. Not an FFI type. Run 37 ruled the mapping for
+/// the floor: the ceremony maps a refusal onto `CoreError::Policy(String)`
+/// carrying this type's `Display` text (additive variant). The grant-bar
+/// mapping is Run 38's.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum PolicyViolation {
     #[error("delegation floor: {have} admin delegation(s) present, floor is {floor}")]
@@ -91,7 +92,10 @@ pub fn check_grant_bar(granter: GrantLevel) -> Result<(), PolicyViolation> {
 
 /// Whether the delegation floor (Rule 1) is a SAFE guarantee under the
 /// configured rooting level — spec L-12, stated as a status, not enforced.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Run 37: crosses FFI (`uniffi::Enum`) as a field of the ceremony record —
+/// the shell receives the L-12 citation with the configured level.
+/// `GrantLevel` does NOT cross FFI (Run 38 rules that with the bar).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum FloorStatus {
     /// Edit-rooting: a compromised recovery key is evicted by the retained
     /// subject key (rotation, no identity change) — the floor holds.

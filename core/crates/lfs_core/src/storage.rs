@@ -14,14 +14,26 @@ use std::sync::Mutex;
 /// rows are never rewritten to a new tag — a tag names what the bytes ARE.
 pub const FORMAT_AUTOMERGE_SAVE_V1: &str = "automerge.save.v1";
 
+/// Run 37 (identity ceremony) — the FIRST Keyhive format, ruled in-run (plan
+/// §9 row 3): the identity document's delegation heads as
+/// `Vec<Signed<StaticDelegation<[u8; 32]>>>` encoded with `bincode` over
+/// `keyhive_core`'s serde shape at the H6 pin `90fe4a51`. Public proof bytes
+/// only — no secrets (the cold keys never enter this adapter; the full
+/// `Archive` was rejected because it carries prekey secrets). `.v1` names
+/// THAT shape: a T4 re-encode (`kh0` → `kh1`, spec L-16) or any upstream
+/// serde change lands under a new value; existing rows are never re-tagged
+/// (a tag names what the bytes ARE — Run 30 rule). This tag is the seam the
+/// Consumer Evidence Note v1 measures against.
+pub const FORMAT_KEYHIVE_STATIC_DELEGATIONS_V1: &str = "keyhive.static-delegations.bincode.v1";
+
 /// Run 36 H1 housekeeping (flagged at Run 30): the Keyhive pin label shown in
-/// `Core::pins()` lives with the adapter that will own the Keyhive bytes, so
-/// H1's grep (`storage` + `policy` only) holds from 1b entry. Text unchanged
-/// from Phase 0 — shells' pins footer is byte-identical. NOTE (pre-existing,
-/// not changed here): the label reads the crates.io version while the H6
-/// pin is git `90fe4a51`; the display string is re-ruled when the 1b format
-/// tag lands (Run 37), not in this housekeeping move.
-pub const PIN_LABEL_KEYHIVE_CORE: &str = "keyhive_core=0.5.0";
+/// `Core::pins()` lives with the adapter that owns the Keyhive bytes.
+/// Run 37 RE-RULED the display string alongside the first format tag: the
+/// crates.io version string alone does not identify the pinned code (SL-0242:
+/// `=0.5.0` and `main@90fe4a51` carry the same version string, 12 commits
+/// apart), so the label now carries both — version + git rev. Shells' pins
+/// footer changes accordingly (predicted in the Run 37 apply guide).
+pub const PIN_LABEL_KEYHIVE_CORE: &str = "keyhive_core=0.5.0+90fe4a51";
 
 // B3 (Phase 0) — force the pin to link, without creating any Keyhive object.
 // Relocated from lib.rs in Run 36 (H1 housekeeping); unchanged otherwise.
@@ -33,6 +45,15 @@ pub(crate) fn keyhive_core_linked() -> &'static str {
 pub trait DocStore: Send + Sync {
     fn read(&self, id: &str) -> rusqlite::Result<Option<Vec<u8>>>;
     fn write(&self, id: &str, bytes: &[u8]) -> rusqlite::Result<()>;
+    /// Run 37 — read a row with its format tag, so a caller can tell an
+    /// Automerge row from a Keyhive row before interpreting the bytes.
+    /// Additive; `read` is unchanged (Phase 0/1a callers never see a Keyhive
+    /// row under the ids they use).
+    fn read_tagged(&self, id: &str) -> rusqlite::Result<Option<(String, Vec<u8>)>>;
+    /// Run 37 — write Keyhive static-delegation bytes. The tag is stamped
+    /// HERE, never threaded through callers (H1: one adapter owns every
+    /// persisted Keyhive byte and its tag). Upsert like `write`.
+    fn write_keyhive_static_delegations(&self, id: &str, bytes: &[u8]) -> rusqlite::Result<()>;
 }
 
 pub struct SqliteStore {
@@ -75,10 +96,28 @@ impl DocStore for SqliteStore {
             .optional()
     }
     fn write(&self, id: &str, bytes: &[u8]) -> rusqlite::Result<()> {
+        self.upsert(id, FORMAT_AUTOMERGE_SAVE_V1, bytes)
+    }
+    fn read_tagged(&self, id: &str) -> rusqlite::Result<Option<(String, Vec<u8>)>> {
+        self.conn
+            .lock()
+            .unwrap()
+            .query_row("SELECT format, bytes FROM docs WHERE id = ?1", params![id], |r| Ok((r.get(0)?, r.get(1)?)))
+            .optional()
+    }
+    fn write_keyhive_static_delegations(&self, id: &str, bytes: &[u8]) -> rusqlite::Result<()> {
+        self.upsert(id, FORMAT_KEYHIVE_STATIC_DELEGATIONS_V1, bytes)
+    }
+}
+
+impl SqliteStore {
+    /// The one write path (Run 37: `write` and the Keyhive write share it; the
+    /// format is a parameter here and a constant at each trait method).
+    fn upsert(&self, id: &str, format: &str, bytes: &[u8]) -> rusqlite::Result<()> {
         self.conn.lock().unwrap().execute(
             "INSERT INTO docs (id, format, bytes) VALUES (?1, ?2, ?3)
              ON CONFLICT(id) DO UPDATE SET format = excluded.format, bytes = excluded.bytes",
-            params![id, FORMAT_AUTOMERGE_SAVE_V1, bytes],
+            params![id, format, bytes],
         )?;
         Ok(())
     }
@@ -110,6 +149,29 @@ mod tests {
             .query_row("SELECT format FROM docs WHERE id = 'd1'", [], |r| r.get(0))
             .unwrap();
         assert_eq!(fmt, FORMAT_AUTOMERGE_SAVE_V1);
+    }
+
+    /// Run 37 — a Keyhive row and an Automerge row coexist in one table, each
+    /// under its own tag; `read` still returns raw bytes; `read_tagged` tells
+    /// them apart; a Keyhive write never re-tags an Automerge row.
+    #[test]
+    fn keyhive_and_automerge_rows_coexist_under_their_own_tags() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("p1-tags.sqlite").to_string_lossy().to_string();
+        let store: Box<dyn DocStore> = Box::new(SqliteStore::open(&path).unwrap());
+        store.write("profile", b"am-bytes").unwrap();
+        store.write_keyhive_static_delegations("identity", b"kh-bytes").unwrap();
+        assert_eq!(store.read("identity").unwrap().as_deref(), Some(&b"kh-bytes"[..]));
+        assert_eq!(
+            store.read_tagged("identity").unwrap(),
+            Some((FORMAT_KEYHIVE_STATIC_DELEGATIONS_V1.to_string(), b"kh-bytes".to_vec()))
+        );
+        assert_eq!(
+            store.read_tagged("profile").unwrap(),
+            Some((FORMAT_AUTOMERGE_SAVE_V1.to_string(), b"am-bytes".to_vec()))
+        );
+        assert_eq!(store.read_tagged("absent").unwrap(), None);
+        assert_ne!(FORMAT_KEYHIVE_STATIC_DELEGATIONS_V1, FORMAT_AUTOMERGE_SAVE_V1);
     }
 
     /// A Phase 0 stub db (no format column) opens and migrates additively.
