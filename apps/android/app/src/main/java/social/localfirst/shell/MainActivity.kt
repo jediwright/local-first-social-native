@@ -4,9 +4,12 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.content.ClipData
+import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
+import android.os.Build
 import android.os.Bundle
+import android.os.PersistableBundle
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -116,6 +119,10 @@ class MainActivity : ComponentActivity() {
     private val deviceLevel: MutableState<String> = mutableStateOf("-")
     private val members: MutableState<List<GroupMember>> = mutableStateOf(emptyList())
     private val membershipStatus: MutableState<String> = mutableStateOf("")
+    // Run 40 — recovery from the cold key (plan §9 row 6; D-40 record shell input):
+    // the seed is pasted as 64 hex and DECODED HERE to bytes — no hex-typed seed
+    // crosses FFI; the core re-checks 32 bytes. The admin seed is never stored.
+    private val recoveryStatus: MutableState<String> = mutableStateOf("")
     private var oauthT0 = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -215,6 +222,10 @@ class MainActivity : ComponentActivity() {
                     membershipStatus = membershipStatus.value,
                     onGrant = { level -> grant(level) },
                     onRevoke = { fp -> revoke(fp) },
+                    // Run 40
+                    recoveryStatus = recoveryStatus.value,
+                    onRecover = { hex -> recoverIdentity(hex) },
+                    onForgetDeviceSeed = { forgetDeviceSeed() },
                 )
             }
         }
@@ -298,6 +309,61 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // ---- Run 40 recovery from the cold key ---------------------------------
+
+    /**
+     * Run 40 — recovery from a cold admin seed (primary or recovery; the device
+     * legs use the RECOVERY seed — D-40-2). The pasted 64-hex is decoded to 32
+     * bytes here; recoverIdentity rebuilds the identity with the admin as active
+     * agent, re-delegates a NEW device (Edit on the identity document, Admin on
+     * every migrated group) and returns the new device seed once — custodied
+     * exactly as the ceremony's. The admin seed lives in this call only. IO thread.
+     */
+    private fun recoverIdentity(hexText: String) {
+        val c = core ?: run { recoveryStatus.value = "core not open"; return }
+        val seed = decodeSeedHex(hexText) ?: run {
+            recoveryStatus.value = "recovery: paste exactly 64 hex characters (32-byte seed)"
+            return
+        }
+        recoveryStatus.value = "recovery: rebuilding identity from the cold seed..."
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val report = c.recoverIdentity(seed)
+                val stored = SeedCustody.store(this@MainActivity, report.deviceKey.deviceSecret)
+                val snap = snapshot(c)
+                withContext(Dispatchers.Main) {
+                    recoveryStatus.value = "recovery: OK — admin ${report.adminFingerprint.take(16)}…, identity members ${report.identityMembers}, groups migrated ${report.groupsMigrated}, unrecovered ${report.groupsUnrecovered.size}, new device ${report.deviceKey.deviceFingerprint.take(16)}… seed ${if (stored) "custodied" else "CUSTODY WRITE FAILED"}"
+                    identityStatus.value = "identity: RECOVERED — new device seed custodied (${report.deviceKey.deviceSecret.size} bytes)"
+                    apply(snap)
+                }
+            } catch (e: Throwable) {
+                withContext(Dispatchers.Main) { recoveryStatus.value = "recovery: error: ${e::class.simpleName}: ${e.message}" }
+            }
+        }
+    }
+
+    /**
+     * Run 40 — TEST-ONLY: drop the custodied device seed (the wrapped seed is
+     * removed from SharedPreferences; the SQLite rows are untouched) to stage the
+     * recovery state on a device without an uninstall. Not a product control.
+     */
+    private fun forgetDeviceSeed() {
+        val gone = SeedCustody.forget(this)
+        identityStatus.value = if (gone)
+            "identity: device seed FORGOTTEN (test-only) — rows kept; relaunch shows the recovery state"
+        else
+            "identity: no device seed to forget"
+        membershipStatus.value = ""
+    }
+
+    /** Run 40 — 64 hex -> 32 bytes, or null. Whitespace trimmed; case-insensitive. */
+    private fun decodeSeedHex(text: String): ByteArray? {
+        val hex = text.trim().lowercase()
+        if (hex.length != 64 || !hex.all { it in '0'..'9' || it in 'a'..'f' }) return null
+        val out = ByteArray(32) { i -> hex.substring(i * 2, i * 2 + 2).toInt(16).toByte() }
+        return out
+    }
+
     private data class Snapshot(val version: ULong, val deviceLevel: String, val members: List<GroupMember>)
 
     /** Everything the membership section renders, read from the core in one place (IO thread). */
@@ -315,7 +381,14 @@ class MainActivity : ComponentActivity() {
 
     private fun copyToClipboard(label: String, text: String) {
         val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        cm.setPrimaryClip(ClipData.newPlainText(label, text))
+        // Run 40 (D-40 record shell input): the clipboard is the residual custody
+        // surface for the cold seeds — mark the clip SENSITIVE (Android 13+ hides
+        // it from the clipboard preview; older releases ignore the extra).
+        val clip = ClipData.newPlainText(label, text)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            clip.description.extras = PersistableBundle().apply { putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true) }
+        }
+        cm.setPrimaryClip(clip)
     }
 
     // ---- Run 33 typed docs -------------------------------------------------
@@ -501,6 +574,10 @@ fun Shell(
     membershipStatus: String,
     onGrant: (GrantLevel) -> Unit,
     onRevoke: (String) -> Unit,
+    // Run 40
+    recoveryStatus: String,
+    onRecover: (String) -> Unit,
+    onForgetDeviceSeed: () -> Unit,
 ) {
     var text by remember(initial) { mutableStateOf(initial) }
     var status by remember(initialStatus) { mutableStateOf(initialStatus) }
@@ -551,6 +628,23 @@ fun Shell(
         }
         Text(membershipStatus, style = MaterialTheme.typography.bodySmall)
         MembersSection(members, onRevoke)
+
+        // Run 40 — recovery from the cold key
+        HorizontalDivider()
+        Text("Recovery (Run 40)", style = MaterialTheme.typography.titleMedium)
+        Text("Paste a cold admin seed (64 hex) — decoded on this device, never stored", style = MaterialTheme.typography.bodySmall)
+        var seedHex by remember { mutableStateOf("") }
+        OutlinedTextField(
+            value = seedHex,
+            onValueChange = { seedHex = it },
+            label = { Text("cold admin seed, 64 hex") },
+            singleLine = true,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { onRecover(seedHex); seedHex = "" }) { Text("Recover identity") }
+            Button(onClick = onForgetDeviceSeed) { Text("Forget device seed (test-only)") }
+        }
+        Text(recoveryStatus, style = MaterialTheme.typography.bodySmall)
     }
 }
 
@@ -627,6 +721,14 @@ object SeedCustody {
         true
     } catch (e: Throwable) {
         false
+    }
+
+    /** Run 40 — TEST-ONLY: remove the wrapped seed (the KeyStore wrap key is kept; it wraps nothing). */
+    fun forget(ctx: Context): Boolean {
+        val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val had = prefs.contains(KEY)
+        prefs.edit().remove(KEY).apply()
+        return had
     }
 
     fun read(ctx: Context): ByteArray? = try {

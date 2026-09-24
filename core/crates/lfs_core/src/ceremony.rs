@@ -407,13 +407,37 @@ pub(crate) fn reload_with(store: &dyn DocStore, signer: MemorySigner) -> Result<
     }
     let delegations = decode(&bytes)?;
     let keyops = decode_events(&kbytes)?;
-    crate::runtime::rt().block_on(reload_into(signer, keyops, delegations))
+    crate::runtime::rt().block_on(reload_into(signer, keyops, delegations, own_op_by_issuer))
+}
+
+/// Run 40 (D-40-4) — the product own-op filter: drop the active agent's own
+/// `KeyOp` by ISSUER, whichever variant carries it (`PrekeysExpanded` or
+/// `PrekeyRotated`; rows hold the latter at the pin — note (o)). The Run 38
+/// filter below it is kept, test-only, so B-5 can assert both reload to the
+/// same `members()`.
+fn own_op_by_issuer(ev: &StaticEvent<[u8; 32]>, own: &Identifier) -> bool {
+    match ev {
+        StaticEvent::PrekeysExpanded(op) => Identifier::from(op.issuer()) != *own,
+        StaticEvent::PrekeyRotated(op) => Identifier::from(op.issuer()) != *own,
+        _ => true,
+    }
+}
+
+/// Run 38's filter, verbatim (matches `PrekeysExpanded` only) — retained for
+/// the D-40-4 / B-5 assertion only.
+#[cfg(test)]
+fn own_op_run38(ev: &StaticEvent<[u8; 32]>, own: &Identifier) -> bool {
+    match ev {
+        StaticEvent::PrekeysExpanded(op) => Identifier::from(op.issuer()) != *own,
+        _ => true,
+    }
 }
 
 async fn reload_into(
     signer: MemorySigner,
     keyops: StaticEvents,
     delegations: StaticDelegations,
+    keep_op: fn(&StaticEvent<[u8; 32]>, &Identifier) -> bool,
 ) -> Result<(Hive, DocumentId), CoreError> {
     let cer = |e: &dyn std::fmt::Debug| CoreError::Ceremony(format!("{e:?}"));
     let own: Identifier = (&signer.verifying_key()).into();
@@ -431,10 +455,8 @@ async fn reload_into(
     let mut events: StaticEvents = keyops
         .into_iter()
         // the active agent's own KeyOp is already known to its hive
-        .filter(|ev| match ev {
-            StaticEvent::PrekeysExpanded(op) => Identifier::from(op.issuer()) != own,
-            _ => true,
-        })
+        // Run 40 (D-40-4): filtered by issuer, both variants (`own_op_by_issuer`)
+        .filter(|ev| keep_op(ev, &own))
         .collect();
     events.extend(delegations.into_iter().map(StaticEvent::Delegated));
     let pending = hive.ingest_unsorted_static_events(events).await;
@@ -443,6 +465,155 @@ async fn reload_into(
     }
     hive.get_document(doc_id).await.ok_or_else(|| CoreError::Ceremony("identity document not materialised".into()))?;
     Ok((hive, doc_id))
+}
+
+/// Run 40 — what the identity half of recovery hands back to the caller
+/// (`groups::DeviceHive::recover`, which continues with the group rows).
+/// Crate-internal; the hive is ADMIN-active and lives only for the recovery
+/// call (D-40-3 step 6: no field outlives it).
+pub(crate) struct Recovered {
+    pub(crate) hive: Hive,
+    pub(crate) doc_id: DocumentId,
+    /// The imported admin's fingerprint (lowercase hex; crosses FFI in the
+    /// `RecoveryReport`).
+    pub(crate) admin_fingerprint: String,
+    /// `members()` of the identity document after the re-delegation.
+    pub(crate) members: u32,
+    pub(crate) new_device: Identifier,
+    /// Every `KeyOp` event now in the `identity-keyops` row (primary,
+    /// recovery, old device(s), new device) — B-1: the group persist path
+    /// seeds `known_ops` from these.
+    pub(crate) identity_keyops: StaticEvents,
+}
+
+/// Run 40 (STOP 1, ruled (a) in-session) — the admin issues a delegation on
+/// the identity document AS BYTES: a `StaticDelegation` signed with the
+/// admin's `MemorySigner` (`try_sign_sync`, keyhive_crypto memory.rs L73),
+/// verified (`try_verify`) before it is handed to `ingest_unsorted_static_events`
+/// — the path the persisted rows already take. Why not `Document::add_member`:
+/// at `90fe4a51` its `can.is_reader()` branch adds the delegate to the
+/// document's CGKA (document.rs L262–281) and a document materialised from
+/// static events has none (`from_group`, L88–93 → `CgkaError::NotInitialized`,
+/// L122–125); `Document.group` / `add_member_with_manual_content` are
+/// `pub(crate)`. Ingest re-applies core's own checks (state.rs L150–183:
+/// non-escalation, signer == the proof's delegate) — a non-admin signer is
+/// refused there too; this app refuses it earlier, before signing.
+/// `proof` = digest of the admin's own root delegation from `row`;
+/// `after_revocations` empty; `after_content` copied from the row's existing
+/// device `Edit` edge (shape parity with the edge core produced at the
+/// ceremony — not required by ingest, which reads `after_content` only when
+/// materialising a NEW subject from a root, keyhive.rs L1826–1845).
+/// No `ed25519` literal here (H4 as amended: the one literal stays in
+/// `groups::signer_from_seed`).
+pub(crate) fn issue_delegation_as_bytes(
+    admin: &MemorySigner,
+    row: &StaticDelegations,
+    delegate: Identifier,
+    can: Access,
+) -> Result<Signed<StaticDelegation<[u8; 32]>>, CoreError> {
+    let admin_id: Identifier = (&admin.verifying_key()).into();
+    let root = row
+        .iter()
+        .find(|d| d.payload().proof.is_none() && d.payload().delegate == admin_id)
+        .ok_or_else(|| CoreError::Recovery("row holds no root delegation to this admin".into()))?;
+    let after_content = row
+        .iter()
+        .find(|d| d.payload().proof.is_some() && d.payload().can == Access::Edit)
+        .map(|d| d.payload().after_content.clone())
+        .unwrap_or_default();
+    let payload = StaticDelegation { can, proof: Some(root.digest()), delegate, after_revocations: Vec::new(), after_content };
+    let signed = admin.try_sign_sync(payload).map_err(|e| CoreError::Recovery(format!("sign delegation: {e}")))?;
+    signed.try_verify().map_err(|e| CoreError::Recovery(format!("issued delegation does not verify: {e}")))?;
+    Ok(signed)
+}
+
+/// Run 40 (plan v0.1.2 §9 row 6; D-40 record §4 steps 2–4; D-40-1(a),
+/// D-40-2, D-40-3(i)) — the identity half of recovery from the cold key.
+/// `admin` is the re-imported cold signer (primary or recovery — either is an
+/// Admin delegate; built by the one seed→signer constructor,
+/// `groups::signer_from_seed`, H4 as amended). Steps: reload the identity
+/// document into an admin-active hive from the two rows (`reload_with`,
+/// K1: delegate-is-active ingest); verify the admin HOLDS `Admin` on it
+/// (else `CoreError::Recovery`, nothing written); introduce `new_device` by
+/// contact card and delegate it `Edit` on the document (K2: the admin proves
+/// with its own capability); rewrite the identity row from `members()` (the
+/// Run 38 shape, sorted by delegate) and the `identity-keyops` row with the
+/// new device's op appended — SAME tags (Run 30 rule; rows never re-tagged).
+/// The admin seed is never persisted (test
+/// `cold_keys_are_exported_and_never_persisted`, extended).
+pub(crate) fn recover_identity(store: &dyn DocStore, admin: MemorySigner, new_device: MemorySigner) -> Result<Recovered, CoreError> {
+    let admin_id: Identifier = (&admin.verifying_key()).into();
+    let admin_fingerprint = hex(&admin.verifying_key().to_bytes());
+    let admin_for_edge = admin.clone();
+    let (hive, doc_id) = reload_with(store, admin)?;
+    let held = crate::runtime::rt().block_on(async {
+        let doc = hive.get_document(doc_id).await?;
+        let doc = doc.lock().await;
+        doc.get_capability(&admin_id).map(|d| d.payload().can())
+    });
+    if held != Some(Access::Admin) {
+        return Err(CoreError::Recovery("seed is not an admin of this identity".into()));
+    }
+    // the row's ops, to be extended — read back so the rewrite carries every op
+    let (_, kbytes) = store
+        .read_tagged(IDENTITY_KEYOPS_ROW_ID)
+        .map_err(|e| CoreError::Storage(e.to_string()))?
+        .ok_or_else(|| CoreError::Ceremony("no identity keyops row".into()))?;
+    let mut keyops = decode_events(&kbytes)?;
+
+    // the row's delegations, read back: the admin's own root is the PROOF of
+    // the edge issued below; the existing device edge is its shape model
+    let (_, dbytes) = store
+        .read_tagged(IDENTITY_ROW_ID)
+        .map_err(|e| CoreError::Storage(e.to_string()))?
+        .ok_or_else(|| CoreError::Ceremony("no identity row".into()))?;
+    let row = decode(&dbytes)?;
+
+    let rer = |e: &dyn std::fmt::Debug| CoreError::Recovery(format!("{e:?}"));
+    let (new_device_id, new_device_op, statics, members) = crate::runtime::rt().block_on(async {
+        // D-40-3 step 4: introduce the replacement device (the `introduce` shape)
+        let device_hive: Hive = Keyhive::generate(new_device, MemoryCiphertextStore::new(), NoListener, OsRng)
+            .await
+            .map_err(|e| rer(&e))?;
+        let card = device_hive.generate_contact_card().await.map_err(|e| rer(&e))?;
+        // condition 2 (STOP 1 ruling): the device's KeyOp lands in the hive
+        // BEFORE its delegation — `receive_contact_card` registers the
+        // individual; the delegation below resolves it through `get_agent`.
+        let new_device_id: Identifier = hive.receive_contact_card(&card).await.map_err(|e| rer(&e))?.into();
+        // STOP 1 ruled (a): the admin ISSUES the Edit delegation as bytes and
+        // the hive ingests it — not `Document::add_member`, whose reader branch
+        // needs a CGKA a reloaded document does not hold (document.rs L239–281,
+        // L122–125 at the pin). Same ingest path as the rows.
+        let edge = issue_delegation_as_bytes(&admin_for_edge, &row, new_device_id, Access::Edit)?;
+        let pending = hive.ingest_unsorted_static_events(vec![StaticEvent::Delegated(edge)]).await;
+        if !pending.is_empty() {
+            return Err(CoreError::Recovery(format!("re-delegation left {} event(s) pending: {pending:?}", pending.len())));
+        }
+        let doc = hive.get_document(doc_id).await.ok_or_else(|| CoreError::Recovery("identity document vanished".into()))?;
+        let doc = doc.lock().await;
+        let mut statics: StaticDelegations = Vec::new();
+        for delegations in doc.members().values() {
+            for signed in delegations.iter() {
+                statics.push((**signed).clone().map(StaticDelegation::from));
+            }
+        }
+        Ok::<_, CoreError>((new_device_id, keyop_event(&card), statics, doc.members().len() as u32))
+    })?;
+    let mut statics = statics;
+    for d in &statics {
+        d.try_verify().map_err(|e| CoreError::Recovery(format!("delegation signature: {e}")))?;
+    }
+    statics.sort_by(|a, b| a.payload().delegate.to_bytes().cmp(&b.payload().delegate.to_bytes()));
+    keyops.push(new_device_op);
+    let bytes = bincode::serialize(&statics).map_err(|e| CoreError::Recovery(format!("encode: {e}")))?;
+    let kbytes = bincode::serialize(&keyops).map_err(|e| CoreError::Recovery(format!("encode keyops: {e}")))?;
+    store
+        .write_keyhive_static_delegations(IDENTITY_ROW_ID, &bytes)
+        .map_err(|e| CoreError::Storage(e.to_string()))?;
+    store
+        .write_keyhive_static_events(IDENTITY_KEYOPS_ROW_ID, &kbytes)
+        .map_err(|e| CoreError::Storage(e.to_string()))?;
+    Ok(Recovered { hive, doc_id, admin_fingerprint, members, new_device: new_device_id, identity_keyops: keyops })
 }
 
 /// Decode a persisted identity row back into its delegations. Test-only in
@@ -588,6 +759,144 @@ mod tests {
         });
     }
 
+    /// Run 40 (plan v0.1.2 §9 row 6; D-40 record `586e73f9…` §4 steps 2–4;
+    /// SL-0249 VE(1)) — WRITTEN FIRST. The device seed is LOST (the ceremony's
+    /// device signer is dropped); a fresh hive is built from a RE-IMPORTED
+    /// cold admin seed (the recovery key — D-40-2) and the two rows alone:
+    /// the identity document is found, `members()` reads three, the admin
+    /// holds `Admin` (K1: delegate-is-active ingest). Then the re-delegation
+    /// (D-40-3 step 4): a new device is introduced and delegated `Edit` by the
+    /// admin; both rows are rewritten under the SAME tags (Run 30 rule) and
+    /// `members()` reads four; a device-active reload from the NEW seed sees
+    /// the same four with the new device at `Edit`.
+    #[test]
+    fn identity_row_recovers_with_reimported_admin() {
+        let dir = tempfile::tempdir().unwrap();
+        let (_, s) = store(&dir, "c40.sqlite");
+        let primary = MemorySigner::generate(&mut OsRng);
+        let recovery = MemorySigner::generate(&mut OsRng);
+        let device = MemorySigner::generate(&mut OsRng);
+        let (rec, material) =
+            enroll_with_device(&s, IdentityConfig { rooting_level: RootingLevel::Edit }, primary.clone(), Some(recovery.clone()), device.clone())
+                .unwrap();
+        let row_before = s.read_tagged(IDENTITY_ROW_ID).unwrap().unwrap();
+        drop(material); // the device seed is gone
+
+        // (i) recovery as read: a fresh hive from the imported admin seed alone
+        let admin = crate::groups::signer_from_seed(&rec.cold_keys.recovery_secret).unwrap();
+        let (hive, doc_id) = reload_with(&s, admin.clone()).expect("reload from the two rows with the cold admin as active agent");
+        assert_eq!(doc_id, material_doc_id(&row_before.1));
+        crate::runtime::rt().block_on(async {
+            let doc = hive.get_document(doc_id).await.expect("identity document found");
+            let doc = doc.lock().await;
+            assert_eq!(doc.members().len(), 3, "primary + recovery + (lost) device");
+            let id: Identifier = (&admin.verifying_key()).into();
+            assert_eq!(doc.get_capability(&id).map(|d| d.payload().can()), Some(Access::Admin), "admin capability Admin");
+        });
+        drop(hive);
+
+        // (ii) re-delegation: the admin enrolls a replacement device at Edit
+        let new_device = MemorySigner::generate(&mut OsRng);
+        let new_seed = new_device.0.to_bytes().to_vec();
+        let recovered = recover_identity(&s, admin.clone(), new_device.clone()).expect("re-delegation from the cold admin");
+        assert_eq!(recovered.doc_id, doc_id);
+        assert_eq!(recovered.members, 4, "primary + recovery + old device + new device");
+        assert_eq!(recovered.admin_fingerprint, rec.cold_keys.recovery_fingerprint);
+        // a seed that is NOT an admin of this identity is refused before anything is written
+        let stranger = MemorySigner::generate(&mut OsRng);
+        match recover_identity(&s, stranger, MemorySigner::generate(&mut OsRng)) {
+            Err(CoreError::Recovery(msg)) => assert_eq!(msg, "seed is not an admin of this identity"),
+            Err(other) => panic!("expected CoreError::Recovery, got {other:?}"),
+            Ok(_) => panic!("expected CoreError::Recovery, got Ok"),
+        }
+        // rows rewritten under the same tags
+        let row_after = s.read_tagged(IDENTITY_ROW_ID).unwrap().unwrap();
+        assert_eq!(row_after.0, storage::FORMAT_KEYHIVE_STATIC_DELEGATIONS_V1);
+        assert_ne!(row_after.1, row_before.1);
+        let dels_after = decode(&row_after.1).unwrap();
+        assert_eq!(dels_after.len(), 4);
+        // STOP 1 (a), condition 4: the ingested edge is the admin's — its issuer
+        // fingerprint is the imported admin's, it delegates the new device at Edit
+        let new_id: Identifier = (&new_device.verifying_key()).into();
+        let edge = dels_after.iter().find(|d| d.payload().delegate == new_id).expect("new device edge persisted");
+        assert_eq!(hex(&edge.issuer().to_bytes()), rec.cold_keys.recovery_fingerprint, "issued by the imported admin");
+        assert_eq!(edge.payload().can, Access::Edit);
+        assert!(edge.payload().proof.is_some(), "proof = the admin's root");
+        assert_eq!(recovered.members, 4);
+        let kops = s.read_tagged(IDENTITY_KEYOPS_ROW_ID).unwrap().unwrap();
+        assert_eq!(kops.0, storage::FORMAT_KEYHIVE_STATIC_EVENTS_V1);
+        assert_eq!(decode_events(&kops.1).unwrap().len(), 4);
+
+        // (iii) the Run 39 device path from the NEW seed sees the re-delegated document
+        let (hive2, doc_id2) = reload_with(&s, crate::groups::signer_from_seed(&new_seed).unwrap()).unwrap();
+        assert_eq!(doc_id2, doc_id);
+        crate::runtime::rt().block_on(async {
+            let doc = hive2.get_document(doc_id2).await.unwrap();
+            let doc = doc.lock().await;
+            assert_eq!(doc.members().len(), 4);
+            let level = |signer: &MemorySigner| {
+                let id: Identifier = (&signer.verifying_key()).into();
+                doc.get_capability(&id).map(|d| d.payload().can())
+            };
+            assert_eq!(level(&new_device), Some(Access::Edit));
+            assert_eq!(level(&device), Some(Access::Edit), "the lost device's edge stays (item (p), HELD)");
+            assert_eq!(level(&primary), Some(Access::Admin));
+            assert_eq!(level(&recovery), Some(Access::Admin));
+        });
+    }
+
+    /// Test helper: the identity document id as `reload_with` recovers it —
+    /// the issuer of the row's root delegations.
+    fn material_doc_id(row: &[u8]) -> DocumentId {
+        let dels = decode(row).unwrap();
+        let root = dels.iter().find(|d| d.payload().proof.is_none()).unwrap();
+        DocumentId::from(Identifier::from(root.issuer()))
+    }
+
+    /// Run 40 (D-40-4, B-5) — the reload's own-op filter is hygiene, not
+    /// behaviour: the same rows reloaded with the Run 38 filter (matches
+    /// `PrekeysExpanded` only) and with the product filter (by issuer, both
+    /// variants) materialise the identity document with identical
+    /// `members()` and capabilities.
+    #[test]
+    fn own_op_filter_by_issuer_reloads_identically_to_run38_filter() {
+        let dir = tempfile::tempdir().unwrap();
+        let (_, s) = store(&dir, "c40b.sqlite");
+        let device = MemorySigner::generate(&mut OsRng);
+        enroll_with_device(
+            &s,
+            IdentityConfig { rooting_level: RootingLevel::Edit },
+            MemorySigner::generate(&mut OsRng),
+            Some(MemorySigner::generate(&mut OsRng)),
+            device.clone(),
+        )
+        .unwrap();
+        let (_, bytes) = s.read_tagged(IDENTITY_ROW_ID).unwrap().unwrap();
+        let (_, kbytes) = s.read_tagged(IDENTITY_KEYOPS_ROW_ID).unwrap().unwrap();
+        let own: Identifier = (&device.verifying_key()).into();
+        let keyops = decode_events(&kbytes).unwrap();
+        // the rows hold PrekeyRotated at the pin (note (o)): the Run 38 filter drops nothing, the product filter drops the own op
+        assert_eq!(keyops.iter().filter(|e| own_op_run38(e, &own)).count(), 3);
+        assert_eq!(keyops.iter().filter(|e| own_op_by_issuer(e, &own)).count(), 2);
+        let snapshot = |keep: fn(&StaticEvent<[u8; 32]>, &Identifier) -> bool| {
+            let (hive, doc_id) = crate::runtime::rt()
+                .block_on(reload_into(device.clone(), decode_events(&kbytes).unwrap(), decode(&bytes).unwrap(), keep))
+                .unwrap();
+            crate::runtime::rt().block_on(async {
+                let doc = hive.get_document(doc_id).await.unwrap();
+                let doc = doc.lock().await;
+                let mut v: Vec<(Vec<u8>, Access)> = doc
+                    .members()
+                    .keys()
+                    .map(|m| (m.to_bytes().to_vec(), doc.get_capability(m).unwrap().payload().can()))
+                    .collect();
+                v.sort();
+                (doc_id, v)
+            })
+        };
+        assert_eq!(snapshot(own_op_run38), snapshot(own_op_by_issuer));
+    }
+
     /// Plan §9 row 3 done-when (3): cold key off-device — the exported seeds
     /// are 32 bytes, differ, and appear NOWHERE in the SQLite file.
     #[test]
@@ -609,6 +918,21 @@ mod tests {
         let pk = |fp: &str| (0..fp.len()).step_by(2).map(|i| u8::from_str_radix(&fp[i..i + 2], 16).unwrap()).collect::<Vec<u8>>();
         assert!(contains(&pk(&ck.primary_admin_fingerprint)));
         assert!(contains(&pk(&ck.recovery_fingerprint)));
+
+        // Run 40 (D-40-2; kickoff done-when (iii)) — the IMPORT path: the
+        // admin seed crosses into recovery and out again without landing;
+        // after step 8 the store holds neither cold seed nor either device seed.
+        let s = SqliteStore::open(&path).unwrap();
+        let (report, live) = crate::groups::DeviceHive::recover(&s, &ck.recovery_secret).unwrap();
+        drop(live);
+        drop(s);
+        let file = std::fs::read(&path).unwrap();
+        let contains = |needle: &[u8]| file.windows(needle.len()).any(|w| w == needle);
+        assert!(!contains(&ck.primary_admin_secret), "primary seed must not be on disk after recovery");
+        assert!(!contains(&ck.recovery_secret), "the IMPORTED recovery seed must not be on disk");
+        assert!(!contains(&rec.device_key.device_secret), "the lost device's seed is not on disk either");
+        assert!(!contains(&report.device_key.device_secret), "the new device seed is exported, never persisted");
+        assert!(contains(&pk(&report.device_key.device_fingerprint)), "its public half is in the rewritten row");
     }
 
     /// H2 — first caller of the floor: with one admin delegation the policy

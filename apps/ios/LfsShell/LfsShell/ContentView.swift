@@ -43,6 +43,12 @@ final class Shell: ObservableObject, @unchecked Sendable {
     @Published var deviceLevel: String = "-"
     @Published var members: [GroupMember] = []
     @Published var membershipStatus = ""
+    // Run 40 — recovery from the cold key (plan §9 row 6; D-40 record shell
+    // input): the seed is pasted as 64 hex and DECODED HERE to bytes — no
+    // hex-typed seed crosses FFI; the core re-checks 32 bytes. The pasted
+    // text is cleared after use; the admin seed is never stored.
+    @Published var recoverySeedHex = ""
+    @Published var recoveryStatus = ""
     static let demoGroup = "demo"
     private var core: Core?
     private var handle: UInt64 = 0
@@ -158,6 +164,66 @@ final class Shell: ObservableObject, @unchecked Sendable {
                 await MainActor.run { self.identityStatus = "identity: ceremony error: \(error.localizedDescription)" }
             }
         }
+    }
+
+    /// Run 40 — recovery from a cold admin seed (primary or recovery; the
+    /// device legs use the RECOVERY seed — D-40-2). The pasted 64-hex is
+    /// decoded to 32 bytes here; `recoverIdentity` rebuilds the identity with
+    /// the admin as active agent, re-delegates a NEW device (Edit on the
+    /// identity document, Admin on every migrated group), and returns the new
+    /// device seed once — stored to the Keychain exactly as the ceremony's.
+    /// The admin seed lives in this call only. Off-main.
+    func recoverIdentity() {
+        guard let core else { recoveryStatus = "core initializing..."; return }
+        guard let seed = Shell.decodeSeedHex(recoverySeedHex) else {
+            recoveryStatus = "recovery: paste exactly 64 hex characters (32-byte seed)"
+            return
+        }
+        recoverySeedHex = ""
+        recoveryStatus = "recovery: rebuilding identity from the cold seed..."
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            do {
+                let report = try core.recoverIdentity(adminSecret: seed)
+                let stored = Keychain.storeDeviceSeed(report.deviceKey.deviceSecret)
+                let snap = Shell.membershipSnapshot(core)
+                await MainActor.run {
+                    self.recoveryStatus = "recovery: OK — admin \(report.adminFingerprint.prefix(16))…, identity members \(report.identityMembers), groups migrated \(report.groupsMigrated), unrecovered \(report.groupsUnrecovered.count), new device \(report.deviceKey.deviceFingerprint.prefix(16))… seed \(stored ? "in Keychain" : "KEYCHAIN WRITE FAILED")"
+                    self.identityStatus = "identity: RECOVERED — new device seed in Keychain (\(report.deviceKey.deviceSecret.count) bytes)"
+                    self.apply(snap)
+                }
+            } catch let e as CoreError {
+                await MainActor.run { self.recoveryStatus = "recovery: error: \(String(describing: e))" }
+            } catch {
+                await MainActor.run { self.recoveryStatus = "recovery: error: \(error.localizedDescription)" }
+            }
+        }
+    }
+
+    /// Run 40 — TEST-ONLY: drop the custodied device seed (Keychain item
+    /// deleted; SQLite rows untouched) to stage the recovery state on a
+    /// device without an uninstall. Not a product control.
+    func forgetDeviceSeed() {
+        let gone = Keychain.deleteDeviceSeed()
+        identityStatus = gone
+            ? "identity: device seed FORGOTTEN (test-only) — rows kept; relaunch shows the recovery state"
+            : "identity: no device seed to forget"
+        membershipStatus = ""
+    }
+
+    /// Run 40 — 64 hex → 32 bytes, or nil. Whitespace trimmed; case-insensitive.
+    static func decodeSeedHex(_ text: String) -> Data? {
+        let hex = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard hex.count == 64, hex.allSatisfy({ $0.isHexDigit }) else { return nil }
+        var out = Data(capacity: 32)
+        var idx = hex.startIndex
+        while idx < hex.endIndex {
+            let next = hex.index(idx, offsetBy: 2)
+            guard let b = UInt8(hex[idx..<next], radix: 16) else { return nil }
+            out.append(b)
+            idx = next
+        }
+        return out.count == 32 ? out : nil
     }
 
     /// Grant one (simulated) peer at `level` on the demo group, through the
@@ -399,6 +465,30 @@ enum Keychain {
         guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess else { return nil }
         return out as? Data
     }
+
+    /// Run 40 — TEST-ONLY: delete the device-seed item. Returns whether an
+    /// item was there to delete.
+    static func deleteDeviceSeed() -> Bool {
+        let q: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+        ]
+        return SecItemDelete(q as CFDictionary) == errSecSuccess
+    }
+}
+
+/// Run 40 — the clipboard is the residual custody surface for the cold seeds
+/// (D-40 record §6): a Copy sets an EXPIRY (60 s) and keeps the item local
+/// (no Handoff/Universal Clipboard). Not a secret store; the password manager
+/// paste is the operator's step.
+enum Clipboard {
+    static func copySensitive(_ text: String) {
+        UIPasteboard.general.setItems(
+            [["public.utf8-plain-text": text]],
+            options: [.expirationDate: Date().addingTimeInterval(60), .localOnly: true]
+        )
+    }
 }
 
 struct ContentView: View {
@@ -455,6 +545,22 @@ struct ContentView: View {
                 .buttonStyle(.bordered)
                 Text(shell.membershipStatus).font(.footnote)
                 MembersSection(members: shell.members) { shell.revoke($0) }
+
+                // Run 40 — recovery from the cold key
+                Divider()
+                Text("Recovery (Run 40)").font(.headline)
+                Text("Paste a cold admin seed (64 hex) — decoded on this device, never stored").font(.footnote)
+                TextField("cold admin seed, 64 hex", text: $shell.recoverySeedHex)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(.caption, design: .monospaced))
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                HStack {
+                    Button("Recover identity") { shell.recoverIdentity() }
+                    Button("Forget device seed (test-only)") { shell.forgetDeviceSeed() }
+                }
+                .buttonStyle(.bordered)
+                Text(shell.recoveryStatus).font(.footnote)
 
                 Text(shell.pins).font(.caption2).foregroundStyle(.secondary)
             }
@@ -576,8 +682,9 @@ struct ColdKeysOnceSection: View {
             Text("Cold admin keys — shown once, NOT stored on this device").font(.subheadline).bold()
             Text("primary \(keys.primaryAdminFingerprint.prefix(16))… / recovery \(keys.recoveryFingerprint.prefix(16))…").font(.caption)
             HStack {
-                Button("Copy primary seed") { UIPasteboard.general.string = hex(keys.primaryAdminSecret) }
-                Button("Copy recovery seed") { UIPasteboard.general.string = hex(keys.recoverySecret) }
+                // Run 40: Copy sets a 60 s clipboard expiry, local-only (Clipboard.copySensitive)
+                Button("Copy primary seed") { Clipboard.copySensitive(hex(keys.primaryAdminSecret)) }
+                Button("Copy recovery seed") { Clipboard.copySensitive(hex(keys.recoverySecret)) }
                 Button("Dismiss") { dismiss() }
             }
             .buttonStyle(.bordered)

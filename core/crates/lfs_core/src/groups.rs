@@ -120,6 +120,28 @@ pub struct GroupMember {
     pub is_device: bool,
 }
 
+/// Run 40 (D-40-2, B-3) — what recovery reports to the shell. Fingerprints,
+/// counts and app-owned group names only; no Keyhive id crosses (H3). The
+/// new device seed crosses ONCE inside `device_key` (the `DeviceKeyExport`
+/// shape the ceremony uses); the shell custodies it exactly as the
+/// ceremony's. The admin seed the shell supplied is never persisted and
+/// never echoed.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct RecoveryReport {
+    /// The imported admin's fingerprint (primary or recovery — D-40-2).
+    pub admin_fingerprint: String,
+    /// `members()` of the identity document after re-delegation (4 on a
+    /// first recovery: primary, recovery, lost device, new device).
+    pub identity_members: u32,
+    /// Persisted groups the new device was delegated `Admin` on (D-40-3 step 5).
+    pub groups_migrated: u32,
+    /// Persisted groups the identity document is NOT a member of (pre-β′
+    /// rows that never reloaded on a device): reported, not fixed.
+    pub groups_unrecovered: Vec<String>,
+    /// The replacement device's key — exported once.
+    pub device_key: ceremony::DeviceKeyExport,
+}
+
 /// Run 39 (STOP 1, ruled (a)) — the ONE seed→signer constructor (H4 as
 /// amended). `seed` must be exactly 32 bytes (the length is fixed by the
 /// crate: `SecretKey = [u8; 32]`, 2.2.0 `signing.rs` L59).
@@ -211,7 +233,149 @@ impl DeviceHive {
         let (hive, doc_id) = ceremony::reload_with(store, signer)?;
         let mut this = Self { hive, device, identity_doc: Some(doc_id), groups: HashMap::new(), known_ops: HashMap::new() };
         this.reload_groups(store)?;
+        // Run 40 (D-40-6 β′, B-2): one-time migration of pre-Run-40 group rows
+        // on the device's ordinary reload — idempotent (groups whose members
+        // already hold the identity document are skipped).
+        this.migrate_groups(store)?;
         Ok(this)
+    }
+
+    /// Run 40 (D-40-6 β′) — for every reloaded group whose `members()` lack
+    /// the identity document, the device (still `Admin`, through the grant
+    /// bar) delegates the document `Admin` on the group and re-persists the
+    /// row pair under the same tags (no re-root, no re-tag). Skips groups
+    /// that already hold it, so an ordinary reload after the first is a
+    /// no-op on the rows. Only the device path calls this; recovery under
+    /// an admin-active hive reports such groups instead (`recover`). Groups
+    /// the device does NOT hold at `Admin` are skipped, not errored: the bar
+    /// is a skip here — a group the device cannot administer (a recovered
+    /// device on an unrecovered legacy group; an adopted below-Admin group)
+    /// stays as it is.
+    fn migrate_groups(&mut self, store: &dyn DocStore) -> Result<(), CoreError> {
+        let Some(doc_id) = self.identity_doc else { return Ok(()) };
+        let doc_member: Identifier = doc_id.into();
+        let names: Vec<String> = self.groups.keys().cloned().collect();
+        for name in names {
+            let gid = self.groups[&name];
+            if self.is_member(gid, doc_member) {
+                continue;
+            }
+            if self.level_on(gid, self.device) != Some(GrantLevel::Admin) {
+                continue;
+            }
+            self.grant(gid, doc_member, GrantLevel::Admin)?;
+            self.persist_group(store, &name, gid)?;
+        }
+        Ok(())
+    }
+
+    /// Run 40 — whether `who` holds a capability on `gid`.
+    fn is_member(&self, gid: GroupId, who: Identifier) -> bool {
+        self.level_on(gid, who).is_some()
+    }
+
+    /// Run 40 (D-40-6, H3) — the identity document is a STRUCTURAL member of
+    /// every group (co-parent at creation, β; migrated once, β′). A Document
+    /// id never crosses FFI, so it is excluded from the shells' member list,
+    /// from the counter, and from the `.keyops` persist set — alongside the
+    /// device's own root membership, which Run 38 already excluded.
+    fn structural(&self, who: &Identifier) -> bool {
+        *who == self.device || self.identity_doc.map(Identifier::from) == Some(*who)
+    }
+
+    /// Run 40 (plan v0.1.2 §9 row 6; D-40 record §4 — the build's spine;
+    /// STOP 1 ruled (a) for step 4). Recovery from the cold key on the same
+    /// store (D-40-1(a)): the device seed is lost, the rows are present.
+    /// `admin_seed` is either cold admin seed (D-40-2; 32-byte check by the
+    /// one seed→signer constructor). Steps: (2) admin signer in memory only;
+    /// (3)–(4) `ceremony::recover_identity` — admin-active reload, Admin
+    /// check, new device introduced and delegated `Edit` by signed static
+    /// delegation + ingest, rows rewritten; (5) every `group:` row pair
+    /// reloaded into the admin hive (`known_ops` seeded from the identity
+    /// KeyOps first — B-1), and on each group the identity document is a
+    /// member of, the admin delegates the new device `Admin` through the
+    /// transitive proof (K3; the grant bar is met by the admin's Admin,
+    /// chained through the document, not by the device) and the row pair is
+    /// re-persisted; groups the document is not a member of are reported;
+    /// (6) `RecoveryReport` built, the admin hive and signer DROPPED before
+    /// this function returns anything; (7) the Run 39 reload from the NEW
+    /// seed becomes the live hive (its β′ migration is a no-op here). The
+    /// admin seed and the new seed are never persisted (test).
+    pub(crate) fn recover(store: &dyn DocStore, admin_seed: &[u8]) -> Result<(RecoveryReport, Self), CoreError> {
+        let admin = signer_from_seed(admin_seed)?;
+        let admin_id: Identifier = (&admin.verifying_key()).into();
+        let new_device = MemorySigner::generate(&mut OsRng);
+        let new_seed = new_device.0.to_bytes().to_vec();
+        let new_fp = hex(&new_device.verifying_key().to_bytes());
+        let recovered = ceremony::recover_identity(store, admin, new_device)?;
+        let (admin_fingerprint, identity_members, groups_migrated, groups_unrecovered) = {
+            // an admin-active hive, scoped to this block (step 6)
+            let mut tmp = Self {
+                hive: recovered.hive,
+                device: admin_id,
+                identity_doc: Some(recovered.doc_id),
+                groups: HashMap::new(),
+                known_ops: HashMap::new(),
+            };
+            // B-1: the lost device (and the new one) are members whose KeyOps
+            // live in the identity row, not in any group `.keyops` row
+            for ev in &recovered.identity_keyops {
+                if let Some(id) = keyop_issuer(ev) {
+                    tmp.known_ops.insert(id, ev.clone());
+                }
+            }
+            tmp.reload_groups(store)?;
+            let doc_member: Identifier = recovered.doc_id.into();
+            let mut migrated = 0u32;
+            let mut unrecovered = Vec::new();
+            let mut names: Vec<String> = tmp.groups.keys().cloned().collect();
+            names.sort();
+            for name in names {
+                let gid = tmp.groups[&name];
+                if !tmp.is_member(gid, doc_member) {
+                    unrecovered.push(name);
+                    continue;
+                }
+                tmp.grant_via_identity_doc(gid, recovered.new_device, GrantLevel::Admin)?;
+                tmp.persist_group(store, &name, gid)?;
+                migrated += 1;
+            }
+            (recovered.admin_fingerprint, recovered.members, migrated, unrecovered)
+        }; // `tmp` (the admin hive and its signer) dropped here — nothing holds them
+        let live = Self::reload(store, &new_seed)?;
+        let report = RecoveryReport {
+            admin_fingerprint,
+            identity_members,
+            groups_migrated,
+            groups_unrecovered,
+            device_key: ceremony::DeviceKeyExport { device_secret: new_seed, device_fingerprint: new_fp },
+        };
+        Ok((report, live))
+    }
+
+    /// Run 40 (D-40-3 step 5) — the recovery grant: the ADMIN (this hive's
+    /// active agent during recovery) delegates `member` on `gid`. The admin
+    /// holds no direct capability on the group; its held level is the chain
+    /// admin →(Admin) identity document →(its level) group, and THAT level
+    /// goes through the grant bar BEFORE `add_member` (policy-before-core,
+    /// H2). Core then proves the delegation transitively (group.rs L502–520).
+    fn grant_via_identity_doc(&self, gid: GroupId, member: Identifier, level: GrantLevel) -> Result<(), CoreError> {
+        let doc_id = self.identity_doc.ok_or_else(|| CoreError::Recovery("no identity document".into()))?;
+        let admin_on_doc = crate::runtime::rt().block_on(async {
+            let d = self.hive.get_document(doc_id).await?;
+            let d = d.lock().await;
+            d.get_capability(&self.device).map(|x| GrantLevel::from(x.payload().can()))
+        });
+        let doc_on_group = self.level_on(gid, doc_id.into());
+        let held = match (admin_on_doc, doc_on_group) {
+            (Some(a), Some(g)) => std::cmp::min(a, g),
+            _ => return Err(CoreError::Recovery("admin has no chain to this group".into())),
+        };
+        policy::check_grant_bar(held).map_err(|v| CoreError::Policy(v.to_string()))?;
+        crate::runtime::rt()
+            .block_on(self.hive.add_member(member, gid, access_of(level), &[]))
+            .map_err(|e| CoreError::Membership(format!("{e:?}")))?;
+        Ok(())
     }
 
     /// Run 39 — P-1 reload of every persisted group. Row ids are enumerated
@@ -297,7 +461,8 @@ impl DeviceHive {
         statics.sort_by(|a, b| a.payload().delegate.to_bytes().cmp(&b.payload().delegate.to_bytes()));
         let keyops: StaticEvents = member_ids
             .iter()
-            .filter(|m| **m != self.device)
+            // Run 40: structural members (device root, identity document) carry no KeyOp here
+            .filter(|m| !self.structural(m))
             .map(|m| {
                 self.known_ops
                     .get(m)
@@ -325,6 +490,8 @@ impl DeviceHive {
             let g = g.lock().await;
             g.members()
                 .keys()
+                // Run 40 (H3): the identity document is structural — never listed
+                .filter(|m| self.identity_doc.map(Identifier::from) != Some(**m))
                 .filter_map(|m| {
                     g.get_capability(m).map(|d| GroupMember {
                         fingerprint: fingerprint_of(m),
@@ -400,7 +567,9 @@ impl DeviceHive {
         let Some(gid) = self.groups.get(group_id) else { return 0 };
         crate::runtime::rt().block_on(async {
             match self.hive.get_group(*gid).await {
-                Some(g) => (g.lock().await.members().len() as u64).saturating_sub(1),
+                // Run 40: structural members (device root + identity document) are
+                // excluded — the same number Run 38/39 read (device root only, then)
+                Some(g) => g.lock().await.members().keys().filter(|m| !self.structural(m)).count() as u64,
                 None => 0,
             }
         })
@@ -429,8 +598,13 @@ impl DeviceHive {
         if let Some(gid) = self.groups.get(group_id) {
             return Ok(*gid);
         }
+        // Run 40 (D-40-6 β): the identity document co-parents every new group
+        // — `Group::generate` roots each parent at Admin (D-38-1), so authority
+        // chains from any admin of the document (K3: recovery). A session-only
+        // hive has no document and roots at the device alone (Run 38 shape).
+        let coparents: Vec<Identifier> = self.identity_doc.map(|d| vec![d.into()]).unwrap_or_default();
         let gid = crate::runtime::rt()
-            .block_on(self.hive.generate_group(vec![]))
+            .block_on(self.hive.generate_group(coparents))
             .map_err(|e| CoreError::Membership(format!("{e:?}")))?;
         self.groups.insert(group_id.to_string(), gid);
         Ok(gid)
@@ -563,6 +737,141 @@ mod tests {
         // and the reloaded hive can keep granting (the device is Admin again)
         let mut d2 = d2;
         assert_eq!(d2.record_membership_event(&s, "demo", GrantLevel::Read).unwrap(), 3);
+    }
+
+    /// Run 40 (plan v0.1.2 §9 row 6; D-40-3 step 8 acceptance; SL-0249 VE(2))
+    /// — WRITTEN SECOND. A ceremony enrolls device A; A creates "demo" (β: the
+    /// identity document co-parents it) and grants two peers; A's seed is
+    /// LOST (hive dropped, seed forgotten). Recovery from the RECOVERY seed
+    /// (D-40-2) re-delegates a new device B: `Edit` on the identity document,
+    /// `Admin` on "demo" through the transitive proof (K3); the report names
+    /// one migrated group and none unrecovered; the live hive (reloaded from
+    /// B's seed) reads the same peers at the same levels with B at `Admin`
+    /// and A still present as a non-device member (its edges stay — item
+    /// (p), HELD). Kill/relaunch from B's seed: the same. B can grant.
+    /// Neither cold seed nor either device seed is in the file.
+    #[test]
+    fn group_authority_survives_device_swap() {
+        let dir = tempfile::tempdir().unwrap();
+        let (path, s) = store(&dir, "g40.sqlite");
+        let primary = MemorySigner::generate(&mut OsRng);
+        let recovery = MemorySigner::generate(&mut OsRng);
+        let device_a = MemorySigner::generate(&mut OsRng);
+        let seed_a = device_a.0.to_bytes().to_vec();
+        let (rec, material) = enroll_with_device(
+            &s,
+            IdentityConfig { rooting_level: RootingLevel::Edit },
+            primary,
+            Some(recovery),
+            device_a,
+        )
+        .unwrap();
+        let fp_a = rec.device_key.device_fingerprint.clone();
+        let peers_before = {
+            let mut a = DeviceHive::from_ceremony(&s, material).unwrap();
+            assert_eq!(a.record_membership_event(&s, "demo", GrantLevel::Read).unwrap(), 1, "counter unchanged by β");
+            assert_eq!(a.record_membership_event(&s, "demo", GrantLevel::Edit).unwrap(), 2);
+            let m = a.members("demo");
+            assert_eq!(m.len(), 3, "device + two peers; the identity document is structural, never listed");
+            assert!(m.iter().all(|x| x.fingerprint.len() == 64), "no document id in the member list (H3)");
+            // β: the identity document IS a member of the group, at Admin
+            let gid = a.groups["demo"];
+            assert_eq!(a.level_on(gid, a.identity_doc.unwrap().into()), Some(GrantLevel::Admin));
+            m.into_iter().filter(|x| !x.is_device).collect::<Vec<_>>()
+        }; // device A's hive dropped; its seed is "lost" below
+        drop(seed_a);
+
+        // recovery from the RECOVERY seed (D-40-2)
+        let (report, live) = DeviceHive::recover(&s, &rec.cold_keys.recovery_secret).expect("recovery from the cold key");
+        assert_eq!(report.admin_fingerprint, rec.cold_keys.recovery_fingerprint);
+        assert_eq!(report.identity_members, 4);
+        assert_eq!(report.groups_migrated, 1);
+        assert!(report.groups_unrecovered.is_empty());
+        assert_eq!(report.device_key.device_secret.len(), 32);
+        assert_ne!(report.device_key.device_fingerprint, fp_a);
+        let seed_b = report.device_key.device_secret.clone();
+
+        let check = |h: &DeviceHive| {
+            assert!(h.has_identity());
+            assert_eq!(h.device_grant_level("demo"), Some(GrantLevel::Admin), "the new device holds Admin on the migrated group");
+            let m = h.members("demo");
+            let b = m.iter().find(|x| x.is_device).expect("new device listed");
+            assert_eq!(b.fingerprint, report.device_key.device_fingerprint);
+            assert_eq!(b.level, GrantLevel::Admin);
+            let a = m.iter().find(|x| x.fingerprint == fp_a).expect("the lost device stays a member (item (p), HELD)");
+            assert!(!a.is_device);
+            assert_eq!(a.level, GrantLevel::Admin);
+            let peers: Vec<GroupMember> = m.iter().filter(|x| !x.is_device && x.fingerprint != fp_a).cloned().collect();
+            assert_eq!(peers, peers_before, "same peers, same levels");
+            assert_eq!(h.membership_version("demo"), 3, "old device + two peers, from the new device's view");
+        };
+        check(&live);
+        drop(live); // the "kill"
+        let relaunched = DeviceHive::reload(&s, &seed_b).expect("relaunch from the new seed");
+        check(&relaunched);
+        // and the recovered device can keep granting (bar passes at Admin)
+        let mut relaunched = relaunched;
+        assert_eq!(relaunched.record_membership_event(&s, "demo", GrantLevel::Read).unwrap(), 4);
+        // seeds never on disk
+        drop(relaunched);
+        drop(s);
+        let file = std::fs::read(&path).unwrap();
+        let contains = |needle: &[u8]| file.windows(needle.len()).any(|w| w == needle);
+        assert!(!contains(&rec.cold_keys.primary_admin_secret));
+        assert!(!contains(&rec.cold_keys.recovery_secret));
+        assert!(!contains(&seed_b), "the new device seed is custodied by the shell, never by the core");
+    }
+
+    /// Run 40 (D-40-6 β′, B-2) — a PRE-Run-40 group row (rooted at the
+    /// device alone, `generate_group(vec![])`) is migrated once on the
+    /// device's ordinary reload: the identity document is delegated `Admin`
+    /// and the row pair is rewritten under the same tags; a second reload
+    /// leaves the rows byte-identical (idempotent). Recovery on an
+    /// UNMIGRATED row reports it in `groups_unrecovered` instead of fixing it.
+    #[test]
+    fn existing_groups_migrate_once_on_reload() {
+        let dir = tempfile::tempdir().unwrap();
+        let (_, s) = store(&dir, "g40b.sqlite");
+        let device = MemorySigner::generate(&mut OsRng);
+        let seed = device.0.to_bytes().to_vec();
+        let (rec, material) = enroll_with_device(
+            &s,
+            IdentityConfig { rooting_level: RootingLevel::Edit },
+            MemorySigner::generate(&mut OsRng),
+            Some(MemorySigner::generate(&mut OsRng)),
+            device,
+        )
+        .unwrap();
+        {
+            let mut d = DeviceHive::from_ceremony(&s, material).unwrap();
+            // the Run 39 shape: a group rooted at the device alone
+            let gid = crate::runtime::rt().block_on(d.hive.generate_group(vec![])).unwrap();
+            d.adopt_group("legacy", gid);
+            assert_eq!(d.record_membership_event(&s, "legacy", GrantLevel::Read).unwrap(), 1);
+            assert_eq!(d.level_on(gid, d.identity_doc.unwrap().into()), None, "pre-β′ row: no identity document");
+        }
+        let legacy_before = s.read_tagged("group:legacy").unwrap().unwrap();
+        // recovery on the unmigrated row: reported, not fixed
+        {
+            let (report, _live) = DeviceHive::recover(&s, &rec.cold_keys.primary_admin_secret).unwrap();
+            assert_eq!(report.groups_unrecovered, vec!["legacy".to_string()]);
+            assert_eq!(report.groups_migrated, 0);
+        }
+        // the recovery rewrote the identity rows but the legacy group row is untouched...
+        assert_eq!(s.read_tagged("group:legacy").unwrap().unwrap(), legacy_before);
+        // ...until the ORIGINAL device reloads ordinarily: migrated once
+        let d2 = DeviceHive::reload(&s, &seed).unwrap();
+        let gid = d2.groups["legacy"];
+        assert_eq!(d2.level_on(gid, d2.identity_doc.unwrap().into()), Some(GrantLevel::Admin));
+        let after_first = s.read_tagged("group:legacy").unwrap().unwrap();
+        assert_ne!(after_first.1, legacy_before.1);
+        assert_eq!(after_first.0, crate::storage::FORMAT_KEYHIVE_STATIC_DELEGATIONS_V1, "same tag (Run 30 rule)");
+        assert_eq!(d2.members("legacy").len(), 2, "device + one peer; document not listed");
+        assert_eq!(d2.membership_version("legacy"), 1);
+        drop(d2);
+        let d3 = DeviceHive::reload(&s, &seed).unwrap();
+        assert_eq!(s.read_tagged("group:legacy").unwrap().unwrap(), after_first, "second reload: idempotent, rows byte-identical");
+        assert_eq!(d3.members("legacy").len(), 2);
     }
 
     /// Run 39 — STOP 1 (a): the seed round-trips to the SAME verifying key

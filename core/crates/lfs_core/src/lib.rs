@@ -48,6 +48,12 @@ pub enum CoreError {
     /// for a policy refusal (that is `Policy`).
     #[error("membership: {0}")]
     Membership(String),
+    /// Run 40 — recovery from the cold key could not proceed (the imported
+    /// seed is not an admin of this identity, or a step of the D-40-3
+    /// sequence failed). Never raised for a policy refusal; a wrong seed
+    /// length is `Ceremony` (the one seed→signer constructor's text).
+    #[error("recovery: {0}")]
+    Recovery(String),
 }
 
 /// The Phase 0 round-trip shape. Run 32 decision: KEPT, not retired — it
@@ -343,6 +349,26 @@ impl Core {
         let hive = groups::DeviceHive::reload(self.store.as_ref(), &device_secret)?;
         *self.device.lock().unwrap() = Some(hive);
         Ok(())
+    }
+
+    /// Run 40 (plan v0.1.2 §9 row 6; D-40 record `586e73f9…` §3 D-40-1..3,
+    /// §4) — recovery from the cold key on THIS store: the custodied device
+    /// seed is lost, the rows are present. `admin_secret` is either cold
+    /// admin seed (primary or recovery, 32 bytes, decoded by the shell from
+    /// the 64-hex paste — never persisted by the core, never echoed). Rebuilds
+    /// the identity document with the admin as active agent, delegates a NEW
+    /// device `Edit` on it and `Admin` on every persisted group the identity
+    /// document is a member of, rewrites the rows under their existing tags,
+    /// drops the admin signer, and installs the Run 39 reload from the new
+    /// seed as the live hive. The new seed crosses once in the report's
+    /// `device_key`; the shell custodies it as the ceremony's. Errors: no
+    /// identity row (`Ceremony`), wrong seed length (`Ceremony`), a seed that
+    /// is not an admin of this identity (`Recovery`, nothing written).
+    /// Blocking; dispatch off-main.
+    pub fn recover_identity(&self, admin_secret: Vec<u8>) -> Result<groups::RecoveryReport, CoreError> {
+        let (report, hive) = groups::DeviceHive::recover(self.store.as_ref(), &admin_secret)?;
+        *self.device.lock().unwrap() = Some(hive);
+        Ok(report)
     }
 
     /// Run 37 — the identity ceremony (plan §9 row 3; `ceremony` module docs).
@@ -1008,6 +1034,91 @@ mod tests {
     /// the `group:` pair under the existing tags (the tag-list assertion
     /// changes by construction — the standing consequence named in the plan
     /// v0.1.2 touch).
+    /// Run 40 (plan v0.1.2 §9 row 6; D-40 record §4 step 8; kickoff done-when
+    /// (ii)) — recovery across the FFI surface: ceremony + grants on a group;
+    /// restart with the device seed FORGOTTEN (the shell's test-only
+    /// "Forget device seed"); `recover_identity(recovery seed)` re-delegates a
+    /// new device and reports; the same process reads the group at the new
+    /// device's Admin; restart + `reload_identity(new seed)` reads the same;
+    /// a wrong-length seed is `Ceremony`, a stranger's seed is `Recovery`,
+    /// nothing written by the refusal; the four-row set and its tags are
+    /// unchanged (no new tag, no new row — recovery REWRITES rows).
+    #[test]
+    fn recovery_from_cold_key_survives_relaunch_via_ffi_surface() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("run40.sqlite").to_string_lossy().to_string();
+        let (rec, peers_before) = {
+            let core = init_core(path.clone()).unwrap();
+            let rec = core.run_identity_ceremony(IdentityConfig { rooting_level: RootingLevel::Edit }).unwrap();
+            assert_eq!(core.grant_member("demo".into(), policy::GrantLevel::Read).unwrap(), 1);
+            assert_eq!(core.grant_member("demo".into(), policy::GrantLevel::Edit).unwrap(), 2);
+            let peers: Vec<groups::GroupMember> = core.group_members("demo".into()).into_iter().filter(|m| !m.is_device).collect();
+            assert_eq!(peers.len(), 2);
+            (rec, peers)
+        }; // process gone; the device seed is NOT carried forward — forgotten
+        let old_fp = rec.device_key.device_fingerprint.clone();
+
+        let (new_seed, after) = {
+            let core = init_core(path.clone()).unwrap();
+            assert!(core.identity_enrolled(), "rows present, seed gone: the recovery state");
+            assert_eq!(core.membership_version("demo".into()), 0);
+            // refusals write nothing
+            let snapshot = std::fs::read(&path).unwrap();
+            assert!(matches!(core.recover_identity(vec![1, 2, 3]), Err(CoreError::Ceremony(_))), "length checked at the boundary");
+            let stranger: Vec<u8> = (0..32).map(|_| rand::random::<u8>()).collect(); // any 32 bytes are a valid seed
+            assert!(matches!(core.recover_identity(stranger), Err(CoreError::Recovery(_))));
+            assert_eq!(std::fs::read(&path).unwrap(), snapshot, "a refused recovery writes nothing");
+            // the recovery (D-40-2: the recovery seed; the primary would do too)
+            let report = core.recover_identity(rec.cold_keys.recovery_secret.clone()).unwrap();
+            assert_eq!(report.admin_fingerprint, rec.cold_keys.recovery_fingerprint);
+            assert_eq!(report.identity_members, 4);
+            assert_eq!(report.groups_migrated, 1);
+            assert!(report.groups_unrecovered.is_empty());
+            assert_ne!(report.device_key.device_fingerprint, old_fp);
+            assert_eq!(core.device_grant_level("demo".into()), Some(policy::GrantLevel::Admin), "new device Admin on the migrated group");
+            let m = core.group_members("demo".into());
+            assert!(m.iter().any(|x| x.is_device && x.level == policy::GrantLevel::Admin && x.fingerprint == report.device_key.device_fingerprint));
+            assert!(m.iter().any(|x| !x.is_device && x.fingerprint == old_fp), "the lost device stays listed (item (p), HELD)");
+            let peers: Vec<groups::GroupMember> = m.iter().filter(|x| !x.is_device && x.fingerprint != old_fp).cloned().collect();
+            assert_eq!(peers, peers_before);
+            assert_eq!(core.membership_version("demo".into()), 3, "old device + two peers, from the new device");
+            assert!(matches!(
+                core.run_identity_ceremony(IdentityConfig { rooting_level: RootingLevel::Edit }),
+                Err(CoreError::IdentityAlreadyEnrolled)
+            ));
+            (report.device_key.device_secret, m)
+        };
+        // kill/relaunch from the NEW seed — the Run 39 path
+        let core = init_core(path.clone()).unwrap();
+        core.reload_identity(new_seed.clone()).unwrap();
+        assert_eq!(core.group_members("demo".into()), after, "relaunch from the new seed: same list");
+        assert_eq!(core.device_grant_level("demo".into()), Some(policy::GrantLevel::Admin));
+        assert_eq!(core.grant_member("demo".into(), policy::GrantLevel::Read).unwrap(), 4, "the recovered device can grant");
+        // seeds never in the file; rows and tags unchanged in shape
+        let file = std::fs::read(&path).unwrap();
+        for seed in [&rec.cold_keys.primary_admin_secret, &rec.cold_keys.recovery_secret, &rec.device_key.device_secret, &new_seed] {
+            assert!(!file.windows(32).any(|w| w == seed.as_slice()), "no seed on disk (H3)");
+        }
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        let tags: Vec<(String, String)> = conn
+            .prepare("SELECT id, format FROM docs ORDER BY id")
+            .unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect();
+        assert_eq!(
+            tags,
+            vec![
+                ("group:demo".to_string(), storage::FORMAT_KEYHIVE_STATIC_DELEGATIONS_V1.to_string()),
+                ("group:demo.keyops".to_string(), storage::FORMAT_KEYHIVE_STATIC_EVENTS_V1.to_string()),
+                ("identity".to_string(), storage::FORMAT_KEYHIVE_STATIC_DELEGATIONS_V1.to_string()),
+                ("identity-keyops".to_string(), storage::FORMAT_KEYHIVE_STATIC_EVENTS_V1.to_string()),
+            ],
+            "recovery rewrites rows; it adds no row and no tag"
+        );
+    }
+
     #[test]
     fn grant_revoke_survive_relaunch_via_ffi_surface() {
         let dir = tempfile::tempdir().unwrap();
