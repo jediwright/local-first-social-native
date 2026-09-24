@@ -118,6 +118,8 @@ pub struct Core {
     /// group membership — `groups` module docs). Lazily a session-only hive
     /// until the identity ceremony runs in this process (then rebuilt from
     /// the persisted rows). In-memory: group persistence is Run 39's.
+    /// Run 39: rebuilt from the custodied seed + rows by `reload_identity`
+    /// after a relaunch (identity, then every persisted group — P-1).
     device: Mutex<Option<groups::DeviceHive>>,
 }
 
@@ -291,13 +293,56 @@ impl Core {
         if guard.is_none() {
             *guard = Some(groups::DeviceHive::session_only()?);
         }
-        guard.as_mut().expect("device hive present").record_membership_event(&group_id, level)
+        guard.as_mut().expect("device hive present").record_membership_event(self.store.as_ref(), &group_id, level)
     }
 
     /// Run 38 — the device's own grant level on the group named `group_id`
     /// (`Admin` on every group it created), or `None` when no such group.
     pub fn device_grant_level(&self, group_id: String) -> Option<policy::GrantLevel> {
         self.device.lock().unwrap().as_ref().and_then(|d| d.device_grant_level(&group_id))
+    }
+
+    /// Run 39 — the membership query for the shells (plan §9 row 5 "both
+    /// shells render grant state"): every member of the group named
+    /// `group_id` as `(fingerprint, level, is_device)`, sorted by fingerprint;
+    /// empty when no such group. H3: the fingerprint is the verifying key in
+    /// lowercase hex (the Run 37 export convention) — no Keyhive id crosses.
+    pub fn group_members(&self, group_id: String) -> Vec<groups::GroupMember> {
+        self.device.lock().unwrap().as_ref().map(|d| d.members(&group_id)).unwrap_or_default()
+    }
+
+    /// Run 39 — revoke the member `fingerprint` from the group named
+    /// `group_id` through the REVOKE bar (`policy::check_revoke_bar`, first
+    /// caller; a below-Admin revoker is refused as `CoreError::Policy` before
+    /// core is invoked — even where core would accept). Persists the group's
+    /// row pair. Returns the new membership version (`members()` − 1 falls;
+    /// no separate removed count — open item (d), Run 40). Blocking;
+    /// dispatch off-main.
+    pub fn revoke_member(&self, group_id: String, fingerprint: String) -> Result<u64, CoreError> {
+        let mut guard = self.device.lock().unwrap();
+        let d = guard.as_mut().ok_or_else(|| CoreError::Membership(format!("no group named {group_id}")))?;
+        d.revoke_member(self.store.as_ref(), &group_id, &fingerprint)
+    }
+
+    /// Run 39 — whether an identity row exists in this store (the shells
+    /// choose between "run the ceremony" and "reload from the seed" on it).
+    pub fn identity_enrolled(&self) -> bool {
+        matches!(self.store.read_tagged(ceremony::IDENTITY_ROW_ID), Ok(Some(_)))
+    }
+
+    /// Run 39 (STOP 1 ruled (a)) — after a relaunch: rebuild the device hive
+    /// from the custodied device seed (`DeviceKeyExport.device_secret`, 32
+    /// bytes, supplied by the shell from Keychain/Keystore — never persisted
+    /// by the core, H3) and the persisted rows: the identity document
+    /// (`ceremony::reload_with`, D-38-4), then every device-created group
+    /// (P-1 row pairs). Replaces any session-only hive. Errors when no
+    /// identity is enrolled, the seed is not 32 bytes, or a row does not
+    /// reload; `IdentityAlreadyEnrolled` semantics are the ceremony's and
+    /// are unchanged. Blocking; dispatch off-main like `init_core`.
+    pub fn reload_identity(&self, device_secret: Vec<u8>) -> Result<(), CoreError> {
+        let hive = groups::DeviceHive::reload(self.store.as_ref(), &device_secret)?;
+        *self.device.lock().unwrap() = Some(hive);
+        Ok(())
     }
 
     /// Run 37 — the identity ceremony (plan §9 row 3; `ceremony` module docs).
@@ -954,6 +999,76 @@ mod tests {
         );
         assert_eq!(core.pins().split(' ').next().unwrap(), storage::PIN_LABEL_KEYHIVE_CORE);
         assert!(storage::PIN_LABEL_KEYHIVE_CORE.ends_with("+90fe4a51"), "label carries the git rev (Run 37 re-rule)");
+    }
+
+    /// Run 39 — plan §9 row 5 across the exported surface: ceremony, grants,
+    /// a revoke, restart, `reload_identity` from the exported device seed;
+    /// grant state identical after the restart; a second restart WITHOUT the
+    /// reload reads 0 (the hive is not implicit); the row set gains exactly
+    /// the `group:` pair under the existing tags (the tag-list assertion
+    /// changes by construction — the standing consequence named in the plan
+    /// v0.1.2 touch).
+    #[test]
+    fn grant_revoke_survive_relaunch_via_ffi_surface() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("run39.sqlite").to_string_lossy().to_string();
+        let (seed, before) = {
+            let core = init_core(path.clone()).unwrap();
+            assert!(!core.identity_enrolled());
+            assert!(matches!(core.reload_identity(vec![0u8; 32]), Err(CoreError::Ceremony(_))), "nothing to reload yet");
+            let rec = core.run_identity_ceremony(IdentityConfig { rooting_level: RootingLevel::Edit }).unwrap();
+            assert!(core.identity_enrolled());
+            assert_eq!(rec.device_key.device_secret.len(), 32);
+            assert_eq!(core.grant_member("demo".into(), policy::GrantLevel::Read).unwrap(), 1);
+            assert_eq!(core.grant_member("demo".into(), policy::GrantLevel::Edit).unwrap(), 2);
+            assert_eq!(core.record_membership_event("demo".into()), 3);
+            let members = core.group_members("demo".into());
+            assert_eq!(members.len(), 4);
+            assert_eq!(members.iter().filter(|m| m.is_device).count(), 1);
+            let victim = members.iter().find(|m| m.level == policy::GrantLevel::Read).unwrap().fingerprint.clone();
+            assert_eq!(core.revoke_member("demo".into(), victim).unwrap(), 2);
+            assert!(matches!(core.revoke_member("nope".into(), "00".into()), Err(CoreError::Membership(_))));
+            (rec.device_key.device_secret, core.group_members("demo".into()))
+        };
+        // restart WITHOUT reload: the counter reads 0 and the query is empty
+        {
+            let core = init_core(path.clone()).unwrap();
+            assert!(core.identity_enrolled());
+            assert_eq!(core.membership_version("demo".into()), 0);
+            assert!(core.group_members("demo".into()).is_empty());
+            assert!(matches!(core.reload_identity(vec![1, 2, 3]), Err(CoreError::Ceremony(_))), "length checked at the boundary");
+        }
+        // restart WITH reload from the custodied seed
+        let core = init_core(path.clone()).unwrap();
+        core.reload_identity(seed.clone()).unwrap();
+        assert_eq!(core.membership_version("demo".into()), 2, "kill/relaunch keeps it");
+        assert_eq!(core.group_members("demo".into()), before);
+        assert_eq!(core.device_grant_level("demo".into()), Some(policy::GrantLevel::Admin));
+        assert!(matches!(
+            core.run_identity_ceremony(IdentityConfig { rooting_level: RootingLevel::Edit }),
+            Err(CoreError::IdentityAlreadyEnrolled)
+        ));
+        // the seed appears nowhere in the file
+        let file = std::fs::read(&path).unwrap();
+        assert!(!file.windows(32).any(|w| w == seed.as_slice()), "device seed never persisted (H3)");
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        let tags: Vec<(String, String)> = conn
+            .prepare("SELECT id, format FROM docs ORDER BY id")
+            .unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect();
+        assert_eq!(
+            tags,
+            vec![
+                ("group:demo".to_string(), storage::FORMAT_KEYHIVE_STATIC_DELEGATIONS_V1.to_string()),
+                ("group:demo.keyops".to_string(), storage::FORMAT_KEYHIVE_STATIC_EVENTS_V1.to_string()),
+                ("identity".to_string(), storage::FORMAT_KEYHIVE_STATIC_DELEGATIONS_V1.to_string()),
+                ("identity-keyops".to_string(), storage::FORMAT_KEYHIVE_STATIC_EVENTS_V1.to_string()),
+            ],
+            "the group row pair under the EXISTING tags; no new tag this run"
+        );
     }
 
     /// B2 — samod is constructed (repo layer), not just declared. In-memory storage; no peers.

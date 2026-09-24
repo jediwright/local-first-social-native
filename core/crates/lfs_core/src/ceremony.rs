@@ -373,6 +373,10 @@ async fn generate_identity_doc(
 
 /// Run 38 — a contact card is a `KeyOp`; the reload path ingests it as the
 /// `PrekeysExpanded` static event (the card's op is always the add-key op).
+/// Run 39 (source read at `90fe4a51`, keyhive.rs L332–341): the premise above
+/// is wrong at the pin — `generate_contact_card` returns `KeyOp::Rotate`, so
+/// the persisted events are `PrekeyRotated`; ingest accepts either, which is
+/// why Run 38 reloaded. Readers match both variants (`groups::keyop_issuer`).
 pub(crate) fn keyop_event(card: &ContactCard) -> StaticEvent<[u8; 32]> {
     match card.op() {
         KeyOp::Add(add) => StaticEvent::PrekeysExpanded(Box::new((**add).clone())),

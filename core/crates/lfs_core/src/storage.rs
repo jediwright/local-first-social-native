@@ -66,6 +66,11 @@ pub trait DocStore: Send + Sync {
     /// Run 38 — write Keyhive static-event bytes (the `KeyOp` row). Tag
     /// stamped HERE (H1), same upsert as the other writes. Additive.
     fn write_keyhive_static_events(&self, id: &str, bytes: &[u8]) -> rusqlite::Result<()>;
+    /// Run 39 — the row ids under `prefix`, sorted. The group reload path
+    /// enumerates its app-owned rows (`group:<app id>` / `group:<app id>.keyops`)
+    /// with it; no format is assumed here — each row's tag is checked by the
+    /// reader. Additive (H1: every row reaches SQLite through this trait).
+    fn ids_with_prefix(&self, prefix: &str) -> rusqlite::Result<Vec<String>>;
 }
 
 pub struct SqliteStore {
@@ -122,6 +127,12 @@ impl DocStore for SqliteStore {
     }
     fn write_keyhive_static_events(&self, id: &str, bytes: &[u8]) -> rusqlite::Result<()> {
         self.upsert(id, FORMAT_KEYHIVE_STATIC_EVENTS_V1, bytes)
+    }
+    fn ids_with_prefix(&self, prefix: &str) -> rusqlite::Result<Vec<String>> {
+        let conn = self.conn.lock().unwrap();
+        let mut st = conn.prepare("SELECT id FROM docs WHERE substr(id, 1, ?1) = ?2 ORDER BY id")?;
+        let rows = st.query_map(params![prefix.chars().count() as i64, prefix], |r| r.get::<_, String>(0))?;
+        rows.collect()
     }
 }
 
@@ -190,6 +201,21 @@ mod tests {
     }
 
     /// A Phase 0 stub db (no format column) opens and migrates additively.
+    /// Run 39 — the prefix enumeration the group reload uses; sorted, exact
+    /// prefix, no wildcard semantics.
+    #[test]
+    fn ids_with_prefix_enumerates_app_owned_rows() {
+        let s = SqliteStore::open(":memory:").unwrap();
+        s.write("profile", b"a").unwrap();
+        s.write_keyhive_static_delegations("group:b", b"b").unwrap();
+        s.write_keyhive_static_events("group:b.keyops", b"c").unwrap();
+        s.write_keyhive_static_delegations("group:a", b"d").unwrap();
+        s.write("groups", b"e").unwrap();
+        assert_eq!(s.ids_with_prefix("group:").unwrap(), vec!["group:a", "group:b", "group:b.keyops"]);
+        assert!(s.ids_with_prefix("zzz").unwrap().is_empty());
+        assert_eq!(s.ids_with_prefix("").unwrap().len(), 5);
+    }
+
     #[test]
     fn migrates_phase0_stub_schema() {
         let dir = tempfile::tempdir().unwrap();

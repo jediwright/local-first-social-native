@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import Security
 import LfsCore
 
 /// Phase 0 B7 shell. One screen, parity with the Android B8 Compose shell:
@@ -14,6 +15,16 @@ import LfsCore
 /// doc content coming back from the core's SQLite. Ping ephemerality is
 /// display-side only: expired pings stay in the doc, the view hides them
 /// (`expiresAt` vs now) — no expiry engine this run (recorded scope).
+/// Run 39 (plan §9 row 5, grant/revoke on device): the FIRST shell surface of
+/// the identity ceremony and of the membership FFI (F-38-1). Custody per spec
+/// §5.2 as ruled: `DeviceKeyExport.deviceSecret` → Keychain
+/// (`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`; hardware-protected
+/// storage of an Ed25519 seed, not a hardware key); `ColdKeyExport` → shown
+/// ONCE for off-device custody (copy), never stored. On launch, an enrolled
+/// identity with a custodied seed is rebuilt through `reloadIdentity`, so
+/// grant state survives kill → relaunch. Rooting level comes from a config
+/// value (`UserDefaults` key `lfsRootingLevel`, default "edit"), not a
+/// constant (H5). All FFI calls that block run off-main.
 final class Shell: ObservableObject, @unchecked Sendable {
     @Published var text = ""
     @Published var status = "starting"
@@ -25,6 +36,14 @@ final class Shell: ObservableObject, @unchecked Sendable {
     @Published var pings: PingsDoc?
     @Published var threads: ThreadsDoc?
     @Published var docsStatus = "docs: not loaded"
+    // Run 39 — identity + membership state (main actor only).
+    @Published var identityStatus = "identity: unknown"
+    @Published var coldKeysOnce: ColdKeyExport?   // shown once, never stored
+    @Published var membershipVersion: UInt64 = 0
+    @Published var deviceLevel: String = "-"
+    @Published var members: [GroupMember] = []
+    @Published var membershipStatus = ""
+    static let demoGroup = "demo"
     private var core: Core?
     private var handle: UInt64 = 0
     private var profileHandle: UInt64 = 0
@@ -66,6 +85,7 @@ final class Shell: ObservableObject, @unchecked Sendable {
                     self.threads = t
                     self.docsStatus = Shell.docsSummary(p, g, t)
                     self.reload()
+                    self.reloadIdentityIfCustodied()
                 }
             } catch let e as CoreError {
                 // A-O22 check: typed catch compiles and binds — one class per error.
@@ -74,6 +94,127 @@ final class Shell: ObservableObject, @unchecked Sendable {
                 await MainActor.run { self.status = "init error: \(error.localizedDescription)" }
             }
         }
+    }
+
+    // MARK: Run 39 — identity ceremony, custody, membership
+
+    /// The rooting level as CONFIGURATION (H5): a runtime value with a
+    /// default, never a constant in code. `defaults write` / a settings
+    /// screen can change it; the core echoes it back in the record.
+    static func configuredRootingLevel() -> RootingLevel {
+        let v = UserDefaults.standard.string(forKey: "lfsRootingLevel") ?? "edit"
+        return v.lowercased() == "admin" ? .admin : .edit
+    }
+
+    /// On launch: if an identity row exists and the Keychain holds the device
+    /// seed, rebuild the device hive (identity, then every persisted group);
+    /// otherwise report which half is missing. Off-main.
+    func reloadIdentityIfCustodied() {
+        guard let core else { return }
+        identityStatus = "identity: checking..."
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            let enrolled = core.identityEnrolled()
+            guard enrolled else {
+                await MainActor.run { self.identityStatus = "identity: not enrolled (run the ceremony)" }
+                return
+            }
+            guard let seed = Keychain.readDeviceSeed() else {
+                await MainActor.run { self.identityStatus = "identity: enrolled, NO device seed in Keychain (recovery = Run 40)" }
+                return
+            }
+            do {
+                try core.reloadIdentity(deviceSecret: seed)
+                let snap = Shell.membershipSnapshot(core)
+                await MainActor.run {
+                    self.identityStatus = "identity: reloaded from Keychain seed (\(seed.count) bytes)"
+                    self.apply(snap)
+                }
+            } catch {
+                await MainActor.run { self.identityStatus = "identity: reload error: \(String(describing: error))" }
+            }
+        }
+    }
+
+    /// The ceremony, once. Device seed → Keychain; cold keys → shown once.
+    func runCeremony() {
+        guard let core else { identityStatus = "core initializing..."; return }
+        let level = Shell.configuredRootingLevel()
+        identityStatus = "identity: running ceremony (rooting \(level))..."
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            do {
+                let rec = try core.runIdentityCeremony(config: IdentityConfig(rootingLevel: level))
+                let stored = Keychain.storeDeviceSeed(rec.deviceKey.deviceSecret)
+                let snap = Shell.membershipSnapshot(core)
+                await MainActor.run {
+                    self.identityStatus = "identity: enrolled — \(rec.adminDelegations) admin delegations, floor \(rec.floorStatus), device seed \(stored ? "in Keychain" : "KEYCHAIN WRITE FAILED")"
+                    self.coldKeysOnce = rec.coldKeys
+                    self.apply(snap)
+                }
+            } catch let e as CoreError {
+                await MainActor.run { self.identityStatus = "identity: ceremony error: \(String(describing: e))" }
+            } catch {
+                await MainActor.run { self.identityStatus = "identity: ceremony error: \(error.localizedDescription)" }
+            }
+        }
+    }
+
+    /// Grant one (simulated) peer at `level` on the demo group, through the
+    /// core's grant bar. The device is Admin on the group it created.
+    func grant(_ level: GrantLevel) {
+        guard let core else { return }
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            let msg: String
+            do {
+                let v = try core.grantMember(groupId: Shell.demoGroup, level: level)
+                msg = "grant \(level) ok → version \(v)"
+            } catch {
+                msg = "grant refused: \(String(describing: error))"
+            }
+            let snap = Shell.membershipSnapshot(core)
+            await MainActor.run { self.membershipStatus = msg; self.apply(snap) }
+        }
+    }
+
+    /// Revoke `fingerprint` from the demo group, through the revoke bar.
+    func revoke(_ fingerprint: String) {
+        guard let core else { return }
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            let msg: String
+            do {
+                let v = try core.revokeMember(groupId: Shell.demoGroup, fingerprint: fingerprint)
+                msg = "revoke ok → version \(v)"
+            } catch {
+                msg = "revoke refused: \(String(describing: error))"
+            }
+            let snap = Shell.membershipSnapshot(core)
+            await MainActor.run { self.membershipStatus = msg; self.apply(snap) }
+        }
+    }
+
+    struct MembershipSnapshot {
+        let version: UInt64
+        let deviceLevel: String
+        let members: [GroupMember]
+    }
+
+    /// Everything the membership section renders, read from the core in one
+    /// place (off-main): counter, the device's own level, the per-member list.
+    static func membershipSnapshot(_ core: Core) -> MembershipSnapshot {
+        let lvl = core.deviceGrantLevel(groupId: demoGroup).map { "\($0)" } ?? "-"
+        return MembershipSnapshot(
+            version: core.membershipVersion(groupId: demoGroup),
+            deviceLevel: lvl,
+            members: core.groupMembers(groupId: demoGroup))
+    }
+
+    @MainActor private func apply(_ s: MembershipSnapshot) {
+        membershipVersion = s.version
+        deviceLevel = s.deviceLevel
+        members = s.members
     }
 
     func reload() {
@@ -225,6 +366,41 @@ enum PingDisplay {
     }
 }
 
+/// Run 39 — custody of the DEVICE seed only (spec §5.2 as ruled): a generic
+/// password item, `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` (never
+/// synced, never migrated to another device). The cold admin seeds are NOT
+/// stored here or anywhere on the device.
+enum Keychain {
+    static let service = "social.localfirst.shell"
+    static let account = "device-seed"
+
+    static func storeDeviceSeed(_ seed: Data) -> Bool {
+        let base: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+        ]
+        SecItemDelete(base as CFDictionary)
+        var add = base
+        add[kSecValueData as String] = seed
+        add[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        return SecItemAdd(add as CFDictionary, nil) == errSecSuccess
+    }
+
+    static func readDeviceSeed() -> Data? {
+        let q: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        var out: CFTypeRef?
+        guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess else { return nil }
+        return out as? Data
+    }
+}
+
 struct ContentView: View {
     @StateObject private var shell = Shell()
 
@@ -257,6 +433,28 @@ struct ContentView: View {
                 if let p = shell.profile { ProfileSection(profile: p) }
                 if let g = shell.pings { PingsSection(pings: g) }
                 if let t = shell.threads { ThreadsSection(threads: t) }
+
+                // Run 39 — identity ceremony + membership (grant/revoke on device)
+                Divider()
+                Text("Identity & groups (Run 39)").font(.headline)
+                Text(shell.identityStatus).font(.footnote)
+                HStack {
+                    Button("Run ceremony") { shell.runCeremony() }
+                    Button("Reload identity") { shell.reloadIdentityIfCustodied() }
+                }
+                .buttonStyle(.bordered)
+                if let ck = shell.coldKeysOnce {
+                    ColdKeysOnceSection(keys: ck) { shell.coldKeysOnce = nil }
+                }
+                Text("group \"\(Shell.demoGroup)\": version \(shell.membershipVersion), device level \(shell.deviceLevel)")
+                    .font(.footnote)
+                HStack {
+                    Button("Grant Read") { shell.grant(.read) }
+                    Button("Grant Edit") { shell.grant(.edit) }
+                }
+                .buttonStyle(.bordered)
+                Text(shell.membershipStatus).font(.footnote)
+                MembersSection(members: shell.members) { shell.revoke($0) }
 
                 Text(shell.pins).font(.caption2).foregroundStyle(.secondary)
             }
@@ -359,6 +557,52 @@ struct ThreadsSection: View {
                              + (m.readAt.map { " · read \($0)" } ?? " · unread"))
                             .font(.caption2).foregroundStyle(.secondary)
                     }
+                }
+            }
+        }
+    }
+}
+
+
+/// Run 39 — the cold admin material, shown ONCE at ceremony time for
+/// off-device custody (copy to the clipboard, then dismiss). Not persisted
+/// by the shell; dismissing drops the only copy the app holds.
+struct ColdKeysOnceSection: View {
+    let keys: ColdKeyExport
+    let dismiss: () -> Void
+    private func hex(_ d: Data) -> String { d.map { String(format: "%02x", $0) }.joined() }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Cold admin keys — shown once, NOT stored on this device").font(.subheadline).bold()
+            Text("primary \(keys.primaryAdminFingerprint.prefix(16))… / recovery \(keys.recoveryFingerprint.prefix(16))…").font(.caption)
+            HStack {
+                Button("Copy primary seed") { UIPasteboard.general.string = hex(keys.primaryAdminSecret) }
+                Button("Copy recovery seed") { UIPasteboard.general.string = hex(keys.recoverySecret) }
+                Button("Dismiss") { dismiss() }
+            }
+            .buttonStyle(.bordered)
+        }
+        .padding(8)
+        .background(Color.yellow.opacity(0.15))
+    }
+}
+
+/// Run 39 — per-member grant state from `groupMembers`, one row per member
+/// (fingerprint prefix, level, "device" marker), with a Revoke control on
+/// every peer. The list is exactly what the core returns — no shell-side
+/// state.
+struct MembersSection: View {
+    let members: [GroupMember]
+    let revoke: (String) -> Void
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Members (\(members.count))").font(.subheadline)
+            if members.isEmpty { Text("no group yet").font(.caption).foregroundStyle(.secondary) }
+            ForEach(members, id: \.fingerprint) { m in
+                HStack {
+                    Text("\(m.fingerprint.prefix(12))… \(String(describing: m.level))\(m.isDevice ? " (device)" : "")").font(.caption.monospaced())
+                    Spacer()
+                    if !m.isDevice { Button("Revoke") { revoke(m.fingerprint) }.font(.caption) }
                 }
             }
         }

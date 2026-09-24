@@ -58,6 +58,18 @@ pub enum GrantLevel {
 /// granter must hold for this app to accept its grant as valid consumer-side.
 pub const GRANT_BAR: GrantLevel = GrantLevel::Admin;
 
+/// Run 39 — Rule 2b, the REVOKE bar (plan §4 H2 wording lands in the v0.1.2
+/// touch): the minimum level a revoker must hold for this app to issue a
+/// revocation. Named separately from [`GRANT_BAR`] (ruled Run 39): the two
+/// bars are equal today and are distinct rules, so one may move without the
+/// other. Consumer policy — at `90fe4a51` core's own revocation refusal is
+/// PROVENANCE-based, not level-based (`principal/group.rs` L629: the issuer
+/// of a delegation may revoke it at any level; `NoProof` only when neither
+/// issuance, lineage, nor transitive access authorises the revoker), so a
+/// below-Admin revoker that issued the grant would be ACCEPTED by core; the
+/// bar is what refuses it, and it runs before any `revoke_member` call.
+pub const REVOKE_BAR: GrantLevel = GrantLevel::Admin;
+
 /// A consumer-policy refusal. Not an FFI type. Run 37 ruled the mapping for
 /// the floor: the ceremony maps a refusal onto `CoreError::Policy(String)`
 /// carrying this type's `Display` text (additive variant). The grant-bar
@@ -68,6 +80,9 @@ pub enum PolicyViolation {
     BelowDelegationFloor { have: usize, floor: usize },
     #[error("grant bar: granter holds {have:?}, bar is {bar:?}")]
     GranterBelowBar { have: GrantLevel, bar: GrantLevel },
+    /// Run 39 — a revoker below [`REVOKE_BAR`].
+    #[error("revoke bar: revoker holds {have:?}, bar is {bar:?}")]
+    RevokerBelowBar { have: GrantLevel, bar: GrantLevel },
 }
 
 /// Rule 1 as a function. `admin_delegations` is the count the caller has
@@ -94,6 +109,20 @@ pub fn check_grant_bar(granter: GrantLevel) -> Result<(), PolicyViolation> {
         Err(PolicyViolation::GranterBelowBar {
             have: granter,
             bar: GRANT_BAR,
+        })
+    }
+}
+
+/// Run 39 — Rule 2b as a function. Refuses a revocation whose revoker holds
+/// less than [`REVOKE_BAR`]. Consumer-side, level only; the `groups` module
+/// composes it BEFORE `revoke_member` (first caller, Run 39).
+pub fn check_revoke_bar(revoker: GrantLevel) -> Result<(), PolicyViolation> {
+    if revoker >= REVOKE_BAR {
+        Ok(())
+    } else {
+        Err(PolicyViolation::RevokerBelowBar {
+            have: revoker,
+            bar: REVOKE_BAR,
         })
     }
 }
@@ -148,6 +177,17 @@ mod tests {
     fn grant_bar_is_admin_and_refuses_below() {
         assert_eq!(GRANT_BAR, GrantLevel::Admin);
         assert!(check_grant_bar(GrantLevel::Admin).is_ok());
+        // Run 39 — Rule 2b, the named revoke bar, same shape.
+        assert_eq!(REVOKE_BAR, GrantLevel::Admin);
+        assert!(check_revoke_bar(GrantLevel::Admin).is_ok());
+        assert_eq!(
+            check_revoke_bar(GrantLevel::Edit),
+            Err(PolicyViolation::RevokerBelowBar { have: GrantLevel::Edit, bar: GrantLevel::Admin })
+        );
+        assert_eq!(
+            check_revoke_bar(GrantLevel::Edit).unwrap_err().to_string(),
+            "revoke bar: revoker holds Edit, bar is Admin"
+        );
         for below in [GrantLevel::Relay, GrantLevel::Read, GrantLevel::Edit] {
             assert_eq!(
                 check_grant_bar(below),

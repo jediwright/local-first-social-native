@@ -3,7 +3,13 @@ package social.localfirst.shell
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.os.Bundle
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import android.util.Base64
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
@@ -35,18 +41,28 @@ import kotlinx.coroutines.withContext
 import uniffi.lfs_core.ChannelMembership
 import uniffi.lfs_core.Core
 import uniffi.lfs_core.CoreException
+import uniffi.lfs_core.ColdKeyExport
 import uniffi.lfs_core.DocKind
+import uniffi.lfs_core.GrantLevel
+import uniffi.lfs_core.GroupMember
 import uniffi.lfs_core.Identity
+import uniffi.lfs_core.IdentityConfig
 import uniffi.lfs_core.Message
 import uniffi.lfs_core.Ping
 import uniffi.lfs_core.PingsDoc
 import uniffi.lfs_core.Preferences
 import uniffi.lfs_core.ProfileDoc
+import uniffi.lfs_core.RootingLevel
 import uniffi.lfs_core.ThreadsDoc
 import uniffi.lfs_core.TrustEntry
 import uniffi.lfs_core.initCore
+import java.security.KeyStore
 import java.time.Instant
 import java.time.format.DateTimeParseException
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
 import kotlin.concurrent.thread
 
 /**
@@ -66,6 +82,18 @@ import kotlin.concurrent.thread
  * kill -> relaunch shows doc content returning from SQLite. Ping
  * ephemerality is display-side only: expired pings stay in the doc, the UI
  * hides them (expiresAt vs now) — no expiry engine this run (recorded scope).
+ *
+ * Run 39 (plan §9 row 5, grant/revoke on device): the FIRST shell surface of
+ * the identity ceremony and of the membership FFI (F-38-1). Custody per spec
+ * §5.2 as ruled — the PROPERTY, not a library: the device seed
+ * (DeviceKeyExport.deviceSecret) is encrypted at rest under an AndroidKeyStore
+ * AES-GCM key (setUserAuthenticationRequired not required in Phase 1) and the
+ * ciphertext lives in app-owned SharedPreferences; ColdKeyExport is shown ONCE
+ * for off-device custody (copy), never stored. On launch, an enrolled identity
+ * with a custodied seed is rebuilt through reloadIdentity, so grant state
+ * survives kill -> relaunch. Rooting level is a config value (SharedPreferences
+ * key "rootingLevel", default "edit"), not a constant (H5). Blocking FFI calls
+ * run on Dispatchers.IO.
  */
 class MainActivity : ComponentActivity() {
     private var core: Core? = null
@@ -81,6 +109,13 @@ class MainActivity : ComponentActivity() {
     private val pings: MutableState<PingsDoc?> = mutableStateOf(null)
     private val threads: MutableState<ThreadsDoc?> = mutableStateOf(null)
     private val docsStatus: MutableState<String> = mutableStateOf("docs: not loaded")
+    // Run 39 — identity + membership state
+    private val identityStatus: MutableState<String> = mutableStateOf("identity: unknown")
+    private val coldKeysOnce: MutableState<ColdKeyExport?> = mutableStateOf(null)
+    private val membershipVersion: MutableState<ULong> = mutableStateOf(0u)
+    private val deviceLevel: MutableState<String> = mutableStateOf("-")
+    private val members: MutableState<List<GroupMember>> = mutableStateOf(emptyList())
+    private val membershipStatus: MutableState<String> = mutableStateOf("")
     private var oauthT0 = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -115,6 +150,7 @@ class MainActivity : ComponentActivity() {
                     threads.value = tr
                     docsStatus.value = docsSummary(p, g, tr)
                 }
+                reloadIdentityIfCustodied(c)
             } catch (e: CoreException) {
                 // A-O22 check: typed catch; subclass on demand
                 // (CoreException.Storage / .Network / .Automerge / .NoSuchHandle).
@@ -166,10 +202,120 @@ class MainActivity : ComponentActivity() {
                     docsStatus = docsStatus.value,
                     onSeed = { seedDemo() },
                     onReloadDocs = { reloadDocs() },
+                    // Run 39
+                    identityStatus = identityStatus.value,
+                    coldKeysOnce = coldKeysOnce.value,
+                    onDismissColdKeys = { coldKeysOnce.value = null },
+                    onCopy = { label, hex -> copyToClipboard(label, hex) },
+                    onCeremony = { runCeremony() },
+                    onReloadIdentity = { core?.let { c -> lifecycleScope.launch(Dispatchers.IO) { reloadIdentityIfCustodied(c) } } },
+                    membershipVersion = membershipVersion.value,
+                    deviceLevel = deviceLevel.value,
+                    members = members.value,
+                    membershipStatus = membershipStatus.value,
+                    onGrant = { level -> grant(level) },
+                    onRevoke = { fp -> revoke(fp) },
                 )
             }
         }
         handleRedirect(intent)
+    }
+
+    // ---- Run 39 identity ceremony, custody, membership -----------------------
+
+    /** The rooting level as CONFIGURATION (H5): a stored value with a default, never a constant in code. */
+    private fun configuredRootingLevel(): RootingLevel {
+        val v = getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("rootingLevel", "edit") ?: "edit"
+        return if (v.equals("admin", ignoreCase = true)) RootingLevel.ADMIN else RootingLevel.EDIT
+    }
+
+    /** IO thread. If an identity row exists and the seed is custodied, rebuild the device hive (identity, then groups). */
+    private suspend fun reloadIdentityIfCustodied(c: Core) {
+        withContext(Dispatchers.Main) { identityStatus.value = "identity: checking..." }
+        if (!c.identityEnrolled()) {
+            withContext(Dispatchers.Main) { identityStatus.value = "identity: not enrolled (run the ceremony)" }
+            return
+        }
+        val seed = SeedCustody.read(this)
+        if (seed == null) {
+            withContext(Dispatchers.Main) { identityStatus.value = "identity: enrolled, NO device seed custodied (recovery = Run 40)" }
+            return
+        }
+        val msg = try {
+            c.reloadIdentity(seed)
+            "identity: reloaded from Keystore-wrapped seed (${seed.size} bytes)"
+        } catch (e: Throwable) {
+            "identity: reload error: ${e::class.simpleName}: ${e.message}"
+        }
+        val snap = snapshot(c)
+        withContext(Dispatchers.Main) { identityStatus.value = msg; apply(snap) }
+    }
+
+    /** The ceremony, once. Device seed -> Keystore-wrapped storage; cold keys -> shown once. */
+    private fun runCeremony() {
+        val c = core ?: run { identityStatus.value = "core not open"; return }
+        val level = configuredRootingLevel()
+        identityStatus.value = "identity: running ceremony (rooting $level)..."
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val rec = c.runIdentityCeremony(IdentityConfig(rootingLevel = level))
+                val stored = SeedCustody.store(this@MainActivity, rec.deviceKey.deviceSecret)
+                val snap = snapshot(c)
+                withContext(Dispatchers.Main) {
+                    identityStatus.value = "identity: enrolled — ${rec.adminDelegations} admin delegations, floor ${rec.floorStatus}, device seed ${if (stored) "custodied" else "CUSTODY WRITE FAILED"}"
+                    coldKeysOnce.value = rec.coldKeys
+                    apply(snap)
+                }
+            } catch (e: Throwable) {
+                withContext(Dispatchers.Main) { identityStatus.value = "identity: ceremony error: ${e::class.simpleName}: ${e.message}" }
+            }
+        }
+    }
+
+    private fun grant(level: GrantLevel) {
+        val c = core ?: return
+        lifecycleScope.launch(Dispatchers.IO) {
+            val msg = try {
+                "grant $level ok -> version ${c.grantMember(DEMO_GROUP, level)}"
+            } catch (e: Throwable) {
+                "grant refused: ${e::class.simpleName}: ${e.message}"
+            }
+            val snap = snapshot(c)
+            withContext(Dispatchers.Main) { membershipStatus.value = msg; apply(snap) }
+        }
+    }
+
+    private fun revoke(fingerprint: String) {
+        val c = core ?: return
+        lifecycleScope.launch(Dispatchers.IO) {
+            val msg = try {
+                "revoke ok -> version ${c.revokeMember(DEMO_GROUP, fingerprint)}"
+            } catch (e: Throwable) {
+                "revoke refused: ${e::class.simpleName}: ${e.message}"
+            }
+            val snap = snapshot(c)
+            withContext(Dispatchers.Main) { membershipStatus.value = msg; apply(snap) }
+        }
+    }
+
+    private data class Snapshot(val version: ULong, val deviceLevel: String, val members: List<GroupMember>)
+
+    /** Everything the membership section renders, read from the core in one place (IO thread). */
+    private fun snapshot(c: Core): Snapshot = Snapshot(
+        version = c.membershipVersion(DEMO_GROUP),
+        deviceLevel = c.deviceGrantLevel(DEMO_GROUP)?.toString() ?: "-",
+        members = c.groupMembers(DEMO_GROUP),
+    )
+
+    private fun apply(s: Snapshot) {
+        membershipVersion.value = s.version
+        deviceLevel.value = s.deviceLevel
+        members.value = s.members
+    }
+
+    private fun copyToClipboard(label: String, text: String) {
+        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        cm.setPrimaryClip(ClipData.newPlainText(label, text))
     }
 
     // ---- Run 33 typed docs -------------------------------------------------
@@ -294,6 +440,10 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/** Run 39 — the app-owned group the shell demonstrates grant/revoke on; also the SharedPreferences file name. */
+const val DEMO_GROUP = "demo"
+const val PREFS = "lfs-shell"
+
 const val PROBE_DID = "did:plc:z72i7hdynmk6r22z27h6tvur"
 const val OAUTH_PLACEHOLDER = "https://jediwright.github.io/local-first-social-native/phase0/oauth.html"
 
@@ -338,6 +488,19 @@ fun Shell(
     docsStatus: String,
     onSeed: () -> Unit,
     onReloadDocs: () -> Unit,
+    // Run 39
+    identityStatus: String,
+    coldKeysOnce: ColdKeyExport?,
+    onDismissColdKeys: () -> Unit,
+    onCopy: (String, String) -> Unit,
+    onCeremony: () -> Unit,
+    onReloadIdentity: () -> Unit,
+    membershipVersion: ULong,
+    deviceLevel: String,
+    members: List<GroupMember>,
+    membershipStatus: String,
+    onGrant: (GrantLevel) -> Unit,
+    onRevoke: (String) -> Unit,
 ) {
     var text by remember(initial) { mutableStateOf(initial) }
     var status by remember(initialStatus) { mutableStateOf(initialStatus) }
@@ -371,6 +534,109 @@ fun Shell(
         profile?.let { ProfileSection(it) }
         pings?.let { PingsSection(it) }
         threads?.let { ThreadsSection(it) }
+
+        // Run 39 — identity ceremony + membership (grant/revoke on device)
+        HorizontalDivider()
+        Text("Identity & groups (Run 39)", style = MaterialTheme.typography.titleMedium)
+        Text(identityStatus, style = MaterialTheme.typography.bodySmall)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = onCeremony) { Text("Run ceremony") }
+            Button(onClick = onReloadIdentity) { Text("Reload identity") }
+        }
+        coldKeysOnce?.let { ColdKeysOnceSection(it, onCopy, onDismissColdKeys) }
+        Text("group \"$DEMO_GROUP\": version $membershipVersion, device level $deviceLevel", style = MaterialTheme.typography.bodySmall)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { onGrant(GrantLevel.READ) }) { Text("Grant Read") }
+            Button(onClick = { onGrant(GrantLevel.EDIT) }) { Text("Grant Edit") }
+        }
+        Text(membershipStatus, style = MaterialTheme.typography.bodySmall)
+        MembersSection(members, onRevoke)
+    }
+}
+
+/**
+ * Run 39 — the cold admin material, shown ONCE at ceremony time for off-device
+ * custody (copy, then dismiss). Not persisted by the shell; dismissing drops the
+ * only copy the app holds.
+ */
+@Composable
+fun ColdKeysOnceSection(keys: ColdKeyExport, onCopy: (String, String) -> Unit, onDismiss: () -> Unit) {
+    val small = MaterialTheme.typography.bodySmall
+    fun hex(b: ByteArray) = b.joinToString("") { "%02x".format(it) }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text("Cold admin keys — shown once, NOT stored on this device", style = MaterialTheme.typography.titleSmall)
+        Text("primary ${keys.primaryAdminFingerprint.take(16)}… / recovery ${keys.recoveryFingerprint.take(16)}…", style = small)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { onCopy("primary seed", hex(keys.primaryAdminSecret)) }) { Text("Copy primary") }
+            Button(onClick = { onCopy("recovery seed", hex(keys.recoverySecret)) }) { Text("Copy recovery") }
+            Button(onClick = onDismiss) { Text("Dismiss") }
+        }
+    }
+}
+
+/**
+ * Run 39 — per-member grant state from groupMembers, one row per member
+ * (fingerprint prefix, level, "device" marker), with a Revoke control on every
+ * peer. The list is exactly what the core returns — no shell-side state.
+ */
+@Composable
+fun MembersSection(members: List<GroupMember>, onRevoke: (String) -> Unit) {
+    val small = MaterialTheme.typography.bodySmall
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text("Members (${members.size})", style = MaterialTheme.typography.titleSmall)
+        if (members.isEmpty()) Text("no group yet", style = small)
+        members.forEach { m ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("${m.fingerprint.take(12)}… ${m.level}${if (m.isDevice) " (device)" else ""}", style = small)
+                if (!m.isDevice) Button(onClick = { onRevoke(m.fingerprint) }) { Text("Revoke") }
+            }
+        }
+    }
+}
+
+/**
+ * Run 39 — custody of the DEVICE seed only (spec §5.2 as ruled, by property):
+ * an AES-256-GCM key generated in AndroidKeyStore (never exportable) wraps the
+ * 32-byte seed; iv + ciphertext live base64 in app-owned SharedPreferences.
+ * setUserAuthenticationRequired is not required in Phase 1. The cold admin seeds
+ * are NOT stored here or anywhere on the device.
+ */
+object SeedCustody {
+    private const val ALIAS = "lfs-device-seed-wrap"
+    private const val KEY = "deviceSeed"
+
+    private fun wrapKey(): SecretKey {
+        val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        (ks.getKey(ALIAS, null) as? SecretKey)?.let { return it }
+        val kg = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
+        kg.init(
+            KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setKeySize(256)
+                .build(),
+        )
+        return kg.generateKey()
+    }
+
+    fun store(ctx: Context, seed: ByteArray): Boolean = try {
+        val c = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, wrapKey()) }
+        val ct = c.doFinal(seed)
+        val packed = Base64.encodeToString(c.iv, Base64.NO_WRAP) + ":" + Base64.encodeToString(ct, Base64.NO_WRAP)
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, packed).apply()
+        true
+    } catch (e: Throwable) {
+        false
+    }
+
+    fun read(ctx: Context): ByteArray? = try {
+        val packed = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, null) ?: return null
+        val (iv, ct) = packed.split(":", limit = 2).map { Base64.decode(it, Base64.NO_WRAP) }
+        Cipher.getInstance("AES/GCM/NoPadding")
+            .apply { init(Cipher.DECRYPT_MODE, wrapKey(), GCMParameterSpec(128, iv)) }
+            .doFinal(ct)
+    } catch (e: Throwable) {
+        null
     }
 }
 
