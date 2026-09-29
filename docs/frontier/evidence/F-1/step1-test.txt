@@ -1,0 +1,66 @@
+   Compiling lfs_core v0.0.0 (~/local-first-social-native/core/crates/lfs_core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.81s
+     Running unittests src/lib.rs (target/debug/deps/lfs_core-8d43936d99ca56eb)
+
+running 52 tests
+test docs::expiry_tests::expiry_is_strict_and_none_on_unparseable ... ok
+test docs::expiry_tests::parses_both_shell_formats_and_offsets ... ok
+test docs::expiry_tests::rejects_non_rfc3339 ... ok
+test ceremony::tests::floor_violation_maps_to_policy_error_and_persists_nothing ... ok
+test ceremony::tests::ceremony_creates_identity_doc_with_two_admin_delegations ... ok
+test ceremony::tests::second_ceremony_is_refused_and_leaves_the_row_intact ... ok
+test ceremony::tests::admin_rooting_records_floor_withdrawn_pending_l12 ... ok
+test groups::tests::below_admin_grant_is_refused_by_policy_before_core ... ok
+test groups::tests::grant_level_maps_one_to_one_onto_access ... ok
+test ceremony::tests::identity_row_reloads_into_device_hive ... ok
+test ceremony::tests::keyhive_bytes_land_under_new_format_tag_and_verify ... ok
+test policy::tests::delegation_floor_is_two_and_refuses_below ... ok
+test policy::tests::floor_is_safe_under_edit_rooting_only ... ok
+test policy::tests::grant_bar_is_admin_and_refuses_below ... ok
+test policy::tests::grant_levels_are_ordered_like_the_pinned_access_enum ... ok
+test runtime::tests::rt_is_shared_across_consecutive_calls ... ok
+test groups::tests::seed_rebuilds_the_same_device_signer ... ok
+test storage::tests::ids_with_prefix_enumerates_app_owned_rows ... ok
+test storage::tests::keyhive_pin_links ... ok
+test ceremony::tests::own_op_filter_by_issuer_reloads_identically_to_run38_filter ... ok
+test storage::tests::keyhive_and_automerge_rows_coexist_under_their_own_tags ... ok
+test storage::tests::migrates_phase0_stub_schema ... ok
+test groups::tests::counter_reads_keyhive_group_membership ... ok
+test storage::tests::roundtrip_under_trait_with_format_tag ... ok
+test groups::tests::below_admin_revoke_is_refused_by_policy_and_core_would_have_accepted ... ok
+test tests::expired_ping_removed_on_load_active_and_unparseable_retained ... ok
+test tests::cleanup_persists_on_save_and_survives_core_restart ... ok
+test tests::init_core_creates_db_at_path_and_inits_runtime ... ok
+test tests::invalid_clock_is_an_error_and_other_kinds_are_untouched ... ok
+test tests::cleanup_follows_injected_clock_not_wall ... ok
+test ceremony::tests::cold_keys_are_exported_and_never_persisted ... ok
+test tests::pings_doc_round_trips_under_trait ... ok
+test tests::kv_and_typed_surfaces_coexist_in_one_store ... ok
+test tests::pings_round_trip_via_typed_ffi_surface ... ok
+test tests::profile_doc_round_trips_under_trait ... ok
+test ceremony::tests::identity_row_recovers_with_reimported_admin ... ok
+test tests::resolve_known_did_to_pds ... ignored
+test tests::resolve_pds_twice_in_one_process ... ignored
+test tests::round_trip_in_memory ... ok
+test tests::samod_repo_constructs_and_creates_doc ... ok
+test tests::survives_save_load_through_sqlite_file ... ok
+test tests::membership_counter_increments_via_ffi_surface ... ok
+test tests::profile_round_trips_via_typed_ffi_surface ... ok
+test tests::threads_doc_round_trips_under_trait ... ok
+test tests::threads_round_trip_via_typed_ffi_surface ... ok
+test tests::identity_ceremony_via_ffi_surface_persists_and_survives_restart ... ok
+test tests::groups_behind_the_counter_via_ffi_surface ... ok
+test groups::tests::device_created_group_reloads_from_row_pair_after_relaunch ... ok
+test tests::grant_revoke_survive_relaunch_via_ffi_surface ... ok
+test groups::tests::existing_groups_migrate_once_on_reload ... ok
+test groups::tests::group_authority_survives_device_swap ... ok
+test tests::recovery_from_cold_key_survives_relaunch_via_ffi_surface ... ok
+
+test result: ok. 50 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+   Doc-tests lfs_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

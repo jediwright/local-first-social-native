@@ -9,6 +9,8 @@ pub mod policy;
 pub mod resolve;
 pub(crate) mod runtime;
 pub mod storage;
+#[cfg(test)]
+mod f1_cross_version;
 
 use autosurgeon::{hydrate, reconcile, Hydrate, Reconcile};
 use docs::{PingsDoc, ProfileDoc, ThreadsDoc};
@@ -1024,7 +1026,7 @@ mod tests {
             ]
         );
         assert_eq!(core.pins().split(' ').next().unwrap(), storage::PIN_LABEL_KEYHIVE_CORE);
-        assert!(storage::PIN_LABEL_KEYHIVE_CORE.ends_with("+90fe4a51"), "label carries the git rev (Run 37 re-rule)");
+        assert!(storage::PIN_LABEL_KEYHIVE_CORE.ends_with("+35460ba1"), "label carries the git rev (Run 37 re-rule)");
     }
 
     /// Run 39 — plan §9 row 5 across the exported surface: ceremony, grants,

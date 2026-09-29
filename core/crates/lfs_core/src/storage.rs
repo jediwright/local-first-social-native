@@ -42,7 +42,7 @@ pub const FORMAT_KEYHIVE_STATIC_EVENTS_V1: &str = "keyhive.static-events.bincode
 /// `=0.5.0` and `main@90fe4a51` carry the same version string, 12 commits
 /// apart), so the label now carries both — version + git rev. Shells' pins
 /// footer changes accordingly (predicted in the Run 37 apply guide).
-pub const PIN_LABEL_KEYHIVE_CORE: &str = "keyhive_core=0.5.0+90fe4a51";
+pub const PIN_LABEL_KEYHIVE_CORE: &str = "keyhive_core=0.6.0+35460ba1";
 
 // B3 (Phase 0) — force the pin to link, without creating any Keyhive object.
 // Relocated from lib.rs in Run 36 (H1 housekeeping); unchanged otherwise.

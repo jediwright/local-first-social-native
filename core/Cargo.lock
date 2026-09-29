@@ -525,15 +525,15 @@ dependencies = [
 
 [[package]]
 name = "beekem"
-version = "0.3.0"
-source = "git+https://github.com/inkandswitch/keyhive?rev=90fe4a51#90fe4a51e38de44cfcef3ea7d504f6bcb2ccfe4b"
+version = "0.4.0"
+source = "git+https://github.com/inkandswitch/keyhive?rev=35460ba1#35460ba125f2358c7ef39deb5f6bbe2b61230582"
 dependencies = [
  "blake3",
  "chacha20poly1305",
  "dupe",
  "ed25519-dalek 2.2.0",
  "future_form",
- "keyhive_crypto 0.2.1 (git+https://github.com/inkandswitch/keyhive?rev=90fe4a51)",
+ "keyhive_crypto 0.2.1 (git+https://github.com/inkandswitch/keyhive?rev=35460ba1)",
  "nonempty 0.10.0",
  "rand 0.8.8",
  "serde",
@@ -2564,7 +2564,7 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cabda9fac1a8b07b2468d15f6bb6d0242308048218de93178ced52977e6f81a1"
 dependencies = [
- "beekem 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "beekem 0.3.0",
  "bincode",
  "blake3",
  "chacha20poly1305",
@@ -2587,10 +2587,10 @@ dependencies = [
 
 [[package]]
 name = "keyhive_core"
-version = "0.5.0"
-source = "git+https://github.com/inkandswitch/keyhive?rev=90fe4a51#90fe4a51e38de44cfcef3ea7d504f6bcb2ccfe4b"
+version = "0.6.0"
+source = "git+https://github.com/inkandswitch/keyhive?rev=35460ba1#35460ba125f2358c7ef39deb5f6bbe2b61230582"
 dependencies = [
- "beekem 0.3.0 (git+https://github.com/inkandswitch/keyhive?rev=90fe4a51)",
+ "beekem 0.4.0",
  "bincode",
  "blake3",
  "chacha20poly1305",
@@ -2601,7 +2601,7 @@ dependencies = [
  "ed25519-dalek 2.2.0",
  "future_form",
  "futures",
- "keyhive_crypto 0.2.1 (git+https://github.com/inkandswitch/keyhive?rev=90fe4a51)",
+ "keyhive_crypto 0.2.1 (git+https://github.com/inkandswitch/keyhive?rev=35460ba1)",
  "nonempty 0.10.0",
  "rand 0.8.8",
  "serde",
@@ -2636,7 +2636,7 @@ dependencies = [
 [[package]]
 name = "keyhive_crypto"
 version = "0.2.1"
-source = "git+https://github.com/inkandswitch/keyhive?rev=90fe4a51#90fe4a51e38de44cfcef3ea7d504f6bcb2ccfe4b"
+source = "git+https://github.com/inkandswitch/keyhive?rev=35460ba1#35460ba125f2358c7ef39deb5f6bbe2b61230582"
 dependencies = [
  "bincode",
  "blake3",
@@ -2691,8 +2691,8 @@ dependencies = [
  "bincode",
  "ed25519-dalek 2.2.0",
  "future_form",
- "keyhive_core 0.5.0 (git+https://github.com/inkandswitch/keyhive?rev=90fe4a51)",
- "keyhive_crypto 0.2.1 (git+https://github.com/inkandswitch/keyhive?rev=90fe4a51)",
+ "keyhive_core 0.6.0",
+ "keyhive_crypto 0.2.1 (git+https://github.com/inkandswitch/keyhive?rev=35460ba1)",
  "nonempty 0.10.0",
  "rand 0.8.8",
  "reqwest 0.12.28",
@@ -4755,7 +4755,7 @@ dependencies = [
  "ed25519-dalek 2.2.0",
  "future_form",
  "futures",
- "keyhive_core 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "keyhive_core 0.5.0",
  "keyhive_crypto 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.8.8",
  "sedimentree_core",
