@@ -964,6 +964,50 @@ mod tests {
         let pairs: std::collections::BTreeMap<[u8; 32], [u8; 32]> = bincode::deserialize(&secrets).unwrap();
         assert!(!pairs.is_empty());
         assert!(pairs.values().all(|sk| !contains(sk)), "no exported secret is on disk");
+
+        // Frontier F-1 (step 7) — the device surface through `Core`: setup,
+        // write and rotate each return the device's secrets and stage rows;
+        // commit writes the three `f1:` rows; a restore on a new `Core`
+        // (standing in for a relaunch) reads everything back. The device seed,
+        // every secret export from every stage, and the plaintext test content
+        // must be absent from the store; the three rows must be present.
+        let core = crate::Core::new(path.clone()).unwrap();
+        let setup = core.f1_setup().unwrap();
+        core.f1_commit().unwrap();
+        let wrote = core.f1_write().unwrap();
+        core.f1_commit().unwrap();
+        let rotated = core.f1_rotate().unwrap();
+        core.f1_commit().unwrap();
+        drop(core);
+        let f1_seed = setup.device_seed.clone().unwrap();
+        let core = crate::Core::new(path.clone()).unwrap();
+        let back = core
+            .f1_restore(f1_seed.clone(), Some(rotated.prekey_secrets.clone()), crate::f1_device::F1RestoreMode::ImportFirst)
+            .unwrap();
+        assert!(back.pending.is_empty() && back.reads.len() == 2 && back.reads.iter().all(|r| r.ok), "restore reads everything");
+        drop(core);
+        let mut file = std::fs::read(&path).unwrap();
+        if let Ok(wal) = std::fs::read(format!("{path}-wal")) {
+            file.extend(wal);
+        }
+        let contains = |needle: &[u8]| file.windows(needle.len()).any(|w| w == needle);
+        assert!(!contains(&f1_seed), "the F-1 device seed is not on disk");
+        for p in [&setup, &wrote, &rotated] {
+            let pairs: std::collections::BTreeMap<[u8; 32], [u8; 32]> = bincode::deserialize(&p.prekey_secrets).unwrap();
+            assert!(!pairs.is_empty());
+            assert!(pairs.values().all(|sk| !contains(sk)), "no F-1 secret from any stage is on disk");
+        }
+        for text in [&b"F-1 content 1 (setup)"[..], &b"F-1 content 2"[..]] {
+            assert!(!contains(text), "no plaintext test content is on disk");
+        }
+        let s = SqliteStore::open(&path).unwrap();
+        for (row, tag) in [
+            (crate::f1_device::ROW_DOC, storage::FORMAT_KEYHIVE_DOC_EVENTS_V1),
+            (crate::f1_device::ROW_KEYOPS, storage::FORMAT_KEYHIVE_STATIC_EVENTS_V1),
+            (crate::f1_device::ROW_CONTENT, storage::FORMAT_KEYHIVE_ENCRYPTED_CONTENT_V1),
+        ] {
+            assert_eq!(s.read_tagged(row).unwrap().map(|(t, _)| t).as_deref(), Some(tag), "{row} is stored under {tag}");
+        }
     }
 
     /// H2 — first caller of the floor: with one admin delegation the policy

@@ -158,6 +158,8 @@ class MainActivity : ComponentActivity() {
                     docsStatus.value = docsSummary(p, g, tr)
                 }
                 reloadIdentityIfCustodied(c)
+                // Frontier F-1 step 7: restore the stored F-1 document (debug builds; no-op in release).
+                F1Debug.onLaunch(this@MainActivity, c)
             } catch (e: CoreException) {
                 // A-O22 check: typed catch; subclass on demand
                 // (CoreException.Storage / .Network / .Automerge / .NoSuchHandle).
@@ -226,6 +228,8 @@ class MainActivity : ComponentActivity() {
                     recoveryStatus = recoveryStatus.value,
                     onRecover = { hex -> recoverIdentity(hex) },
                     onForgetDeviceSeed = { forgetDeviceSeed() },
+                    // Frontier F-1 step 7 (debug source set; empty in release)
+                    f1Section = { F1Debug.Section(this@MainActivity) { core } },
                 )
             }
         }
@@ -578,6 +582,8 @@ fun Shell(
     recoveryStatus: String,
     onRecover: (String) -> Unit,
     onForgetDeviceSeed: () -> Unit,
+    // Frontier F-1 step 7
+    f1Section: @Composable () -> Unit = {},
 ) {
     var text by remember(initial) { mutableStateOf(initial) }
     var status by remember(initialStatus) { mutableStateOf(initialStatus) }
@@ -645,6 +651,8 @@ fun Shell(
             Button(onClick = onForgetDeviceSeed) { Text("Forget device seed (test-only)") }
         }
         Text(recoveryStatus, style = MaterialTheme.typography.bodySmall)
+
+        f1Section()
     }
 }
 

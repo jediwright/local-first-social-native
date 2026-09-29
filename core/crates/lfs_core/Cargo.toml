@@ -26,6 +26,9 @@ keyhive_core = { git = "https://github.com/inkandswitch/keyhive", rev = "35460ba
 # Run 37 (identity ceremony) — companion crates keyhive_core does not re-export;
 # zero new packages (all already locked as keyhive_core transitives); ruled in-run.
 keyhive_crypto = { git = "https://github.com/inkandswitch/keyhive", rev = "35460ba1" }
+# Frontier F-1 step 7 — the ciphertext type keyhive_core does not re-export;
+# zero new packages (already locked as a keyhive_core transitive at the same rev).
+beekem = { git = "https://github.com/inkandswitch/keyhive", rev = "35460ba1" }
 future_form = "0.3.1"
 rand = "0.8"
 nonempty = "0.10"

@@ -4,6 +4,7 @@ uniffi::setup_scaffolding!();
 
 pub mod ceremony;
 pub mod docs;
+pub mod f1_device;
 pub mod groups;
 pub mod policy;
 pub mod resolve;
@@ -52,6 +53,10 @@ pub enum CoreError {
     /// for a policy refusal (that is `Policy`).
     #[error("membership: {0}")]
     Membership(String),
+    /// Frontier (F-1, step 7) — the F-1 device surface failed (not set up,
+    /// nothing staged, a missing row, or a Keyhive error on that path).
+    #[error("frontier: {0}")]
+    Frontier(String),
     /// Run 40 — recovery from the cold key could not proceed (the imported
     /// seed is not an admin of this identity, or a step of the D-40-3
     /// sequence failed). Never raised for a policy refusal; a wrong seed
@@ -131,6 +136,54 @@ pub struct Core {
     /// Run 39: rebuilt from the custodied seed + rows by `reload_identity`
     /// after a relaunch (identity, then every persisted group — P-1).
     device: Mutex<Option<groups::DeviceHive>>,
+    /// Frontier (F-1, step 7) — the separate F-1 hive (plan D1(a)); never
+    /// the identity's device hive.
+    f1: Mutex<Option<f1_device::F1Hive>>,
+}
+
+/// Frontier (F-1, step 7) — the device surface for encrypted content on a
+/// document rebuilt from storage (`f1_device` module docs). Blocking; shells
+/// call these off-main. After `f1_setup`, `f1_write` or `f1_rotate`, save the
+/// returned secrets first, then call `f1_commit`.
+#[uniffi::export]
+impl Core {
+    pub fn f1_setup(&self) -> Result<f1_device::F1Pending, CoreError> {
+        let (hive, pending) = f1_device::F1Hive::setup()?;
+        *self.f1.lock().unwrap() = Some(hive);
+        Ok(pending)
+    }
+
+    pub fn f1_write(&self) -> Result<f1_device::F1Pending, CoreError> {
+        self.f1.lock().unwrap().as_mut().ok_or_else(f1_absent)?.write()
+    }
+
+    pub fn f1_rotate(&self) -> Result<f1_device::F1Pending, CoreError> {
+        self.f1.lock().unwrap().as_mut().ok_or_else(f1_absent)?.rotate()
+    }
+
+    pub fn f1_commit(&self) -> Result<f1_device::F1Report, CoreError> {
+        self.f1.lock().unwrap().as_mut().ok_or_else(f1_absent)?.commit(self.store.as_ref())
+    }
+
+    pub fn f1_restore(
+        &self,
+        device_seed: Vec<u8>,
+        prekey_secrets: Option<Vec<u8>>,
+        mode: f1_device::F1RestoreMode,
+    ) -> Result<f1_device::F1Report, CoreError> {
+        let (hive, report) =
+            f1_device::F1Hive::restore(self.store.as_ref(), &device_seed, prekey_secrets.as_deref(), mode)?;
+        *self.f1.lock().unwrap() = Some(hive);
+        Ok(report)
+    }
+
+    pub fn f1_present(&self) -> bool {
+        f1_device::present(self.store.as_ref())
+    }
+}
+
+fn f1_absent() -> CoreError {
+    CoreError::Frontier("F-1 not set up or restored in this process".into())
 }
 
 /// Run 30 — the explicit FFI init entry point (Run 27 lifecycle contract).
@@ -419,6 +472,7 @@ impl Core {
             open: Mutex::new(HashMap::new()),
             next: Mutex::new(1),
             device: Mutex::new(None),
+            f1: Mutex::new(None),
         })
     }
 

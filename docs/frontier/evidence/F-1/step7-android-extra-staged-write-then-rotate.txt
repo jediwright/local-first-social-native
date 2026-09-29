@@ -1,0 +1,10 @@
+--------- beginning of main
+09-29 19:25:41.488 19103 19164 I F1      : write · doc DocumentId(0x302c53223c35831a… · key update false · pending 0 · cgka 4 · secret pairs 15
+09-29 19:25:41.488 19103 19164 I F1      : secrets saved (wrap key: software); rows NOT committed (staged failure) — kill now
+09-29 19:25:44.737 19103 19163 I F1      : rotate · doc DocumentId(0x302c53223c35831a… · key update true · pending 0 · cgka 5 · secret pairs 16
+09-29 19:25:44.737 19103 19163 I F1      : secrets NOT re-saved (staged failure); rows committed
+09-29 19:25:57.248 20432 20452 I F1      : F-1 launch: restore ImportFirst · doc DocumentId(0x302c53223c35831a… · key update - · pending 0 · cgka 5 · secret pairs 22
+09-29 19:25:57.248 20432 20452 I F1      :   read content 1 (setup): OK (F-1 content 1 (setup))
+09-29 19:25:57.248 20432 20452 I F1      :   read content 2: OK (F-1 content 2)
+09-29 19:25:57.248 20432 20452 I F1      :   read content 3: OK (F-1 content 3)
+09-29 19:25:57.248 20432 20452 I F1      : wrap key: software

@@ -42,6 +42,13 @@ pub const FORMAT_KEYHIVE_STATIC_EVENTS_V1: &str = "keyhive.static-events.bincode
 /// material only: no seed and no prekey or leaf secret is ever written here.
 pub const FORMAT_KEYHIVE_DOC_EVENTS_V1: &str = "keyhive.doc-events.bincode.v1";
 
+/// Frontier (F-1, step 7): `bincode` over `(DocumentId, Vec<(String, [u8; 32],
+/// beekem::encrypted::EncryptedContent<Vec<u8>, [u8; 32]>)>)` at Keyhive
+/// `35460ba1`: a document's id and its stored ciphertexts, each with a label
+/// and content ref. Ciphertext and public ids only; no plaintext, seed or
+/// secret is ever written here.
+pub const FORMAT_KEYHIVE_ENCRYPTED_CONTENT_V1: &str = "keyhive.encrypted-content.bincode.v1";
+
 /// Run 36 H1 housekeeping (flagged at Run 30): the Keyhive pin label shown in
 /// `Core::pins()` lives with the adapter that owns the Keyhive bytes.
 /// Run 37 RE-RULED the display string alongside the first format tag: the
@@ -75,6 +82,8 @@ pub trait DocStore: Send + Sync {
     fn write_keyhive_static_events(&self, id: &str, bytes: &[u8]) -> rusqlite::Result<()>;
     /// Frontier (F-1) — write a document's public event set. Tag stamped here.
     fn write_keyhive_doc_events(&self, id: &str, bytes: &[u8]) -> rusqlite::Result<()>;
+    /// Frontier (F-1, step 7) — write stored ciphertexts. Tag stamped here.
+    fn write_keyhive_encrypted_content(&self, id: &str, bytes: &[u8]) -> rusqlite::Result<()>;
     /// Run 39 — the row ids under `prefix`, sorted. The group reload path
     /// enumerates its app-owned rows (`group:<app id>` / `group:<app id>.keyops`)
     /// with it; no format is assumed here — each row's tag is checked by the
@@ -139,6 +148,9 @@ impl DocStore for SqliteStore {
     }
     fn write_keyhive_doc_events(&self, id: &str, bytes: &[u8]) -> rusqlite::Result<()> {
         self.upsert(id, FORMAT_KEYHIVE_DOC_EVENTS_V1, bytes)
+    }
+    fn write_keyhive_encrypted_content(&self, id: &str, bytes: &[u8]) -> rusqlite::Result<()> {
+        self.upsert(id, FORMAT_KEYHIVE_ENCRYPTED_CONTENT_V1, bytes)
     }
     fn ids_with_prefix(&self, prefix: &str) -> rusqlite::Result<Vec<String>> {
         let conn = self.conn.lock().unwrap();

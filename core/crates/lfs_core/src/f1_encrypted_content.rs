@@ -8,6 +8,8 @@
 //! no-secrets-on-disk rule only, so an unexpected result shows up as output,
 //! not as a failed setup.
 
+// Shared with the device path (step 7): the replay filter, event names, prefixes.
+use crate::f1_device::{kind, not_own_key_op, short};
 use crate::storage::{DocStore, SqliteStore, FORMAT_KEYHIVE_DOC_EVENTS_V1};
 use future_form::Sendable;
 use keyhive_core::access::Access;
@@ -43,16 +45,6 @@ fn id_of(signer: &MemorySigner) -> Identifier {
     (&signer.verifying_key()).into()
 }
 
-/// A hive already knows its own prekey op, so replay skips it (same rule as
-/// the identity reload).
-fn not_own_key_op(ev: &StaticEvent<[u8; 32]>, own: &Identifier) -> bool {
-    match ev {
-        StaticEvent::PrekeysExpanded(op) => Identifier::from(op.issuer()) != *own,
-        StaticEvent::PrekeyRotated(op) => Identifier::from(op.issuer()) != *own,
-        _ => true,
-    }
-}
-
 async fn events_for(hive: &Hive, who: Identifier) -> Events {
     hive.static_events_for_agent(who).await.into_values().collect()
 }
@@ -61,13 +53,6 @@ async fn sync_into(from: &Hive, to: &Hive, to_signer: &MemorySigner) -> usize {
     let own = id_of(to_signer);
     let evs: Events = events_for(from, own).await.into_iter().filter(|e| not_own_key_op(e, &own)).collect();
     to.ingest_unsorted_static_events(evs).await.len()
-}
-
-/// Public identifiers are printed as prefixes only (charter rule 10).
-fn short(id: &impl std::fmt::Debug) -> String {
-    let full = format!("{id:?}");
-    let cut: String = full.chars().take(full.find("0x").map(|i| i + 18).unwrap_or(24)).collect();
-    format!("{cut}…")
 }
 
 fn report(what: &str, r: Result<Vec<u8>, impl std::fmt::Debug>) {
@@ -132,18 +117,6 @@ fn setup(s: &SqliteStore, store_peer_key_op: bool) -> Setup {
         (doc, old, secrets)
     });
     Setup { device, peer, peer_hive, doc, old, secrets }
-}
-
-/// Short name for an event, marking the device's own key ops.
-fn kind(ev: &StaticEvent<[u8; 32]>, own: &Identifier) -> String {
-    let mine = |i: Identifier| if i == *own { " (own)" } else { "" };
-    match ev {
-        StaticEvent::PrekeysExpanded(op) => format!("PrekeysExpanded{}", mine(Identifier::from(op.issuer()))),
-        StaticEvent::PrekeyRotated(op) => format!("PrekeyRotated{}", mine(Identifier::from(op.issuer()))),
-        StaticEvent::CgkaOperation(op) => format!("CgkaOperation{}", mine(Identifier::from(op.issuer()))),
-        StaticEvent::Delegated(op) => format!("Delegated{}", mine(Identifier::from(op.issuer()))),
-        StaticEvent::Revoked(op) => format!("Revoked{}", mine(Identifier::from(op.issuer()))),
-    }
 }
 
 fn kinds(evs: &[std::sync::Arc<StaticEvent<[u8; 32]>>], own: &Identifier) -> Vec<String> {
