@@ -8,6 +8,20 @@ A small native iOS and Android app, with a shared Rust core, for a local-first s
 
 This is the native-device sibling of [local-first-social-network](https://github.com/jediwright/local-first-social-network) (the web app). The two share the social design and data model and make different choices for the device context: device-held keys, a native shell per platform, SQLite on disk. Neither is downstream of the other.
 
+## On this branch now
+
+**Experiment F-1, in progress: encrypted content on a document rebuilt from storage.** It asks whether the app can keep reading and writing encrypted Keyhive documents after a restart, without storing key secrets unprotected. Early results come from tests in the Rust core only; nothing has run on a device yet.
+
+- **Keyhive moved to `35460ba1`,** Keyhive's current `main` and 16 commits past the `90fe4a51` pin that `main` uses. Rows stored at `90fe4a51` load unchanged: both stored formats decode and re-encode byte for byte, and the identity reloads with the same members. The dependency notes further down still describe `main`.
+- **It works, given two conditions.** A device rebuilt from storage reads content written before the restart and writes new content, and a member it shared with reads both, across two restarts. That needs:
+  1. the device's secrets imported before its stored history is replayed. Without them the device can't rejoin its own encryption group.
+  2. the key events of every member the device added, stored beside Keyhive's own export for the device, because that export leaves them out. This is gap G-5; its cause isn't known yet.
+- **The secrets have to be saved again after every change that rotates a key,** and an ordinary encryption can rotate one. Secrets saved before a key update can't read content written after it.
+- **No seed or secret reaches the database.** The test that checks this now covers the new stored row.
+- **Next:** keeping the secrets in each platform's protected storage in the app itself. That means the Android Keystore on the emulator, which is software-backed, so it shows the approach rather than hardware-backed protection, and then the Keychain on an iPhone. After that come the experiment's end-of-run checks and its log entry.
+
+Details are in [`docs/frontier/gap-register.md`](docs/frontier/gap-register.md) (G-3, G-4, G-5) and the test output in [`docs/frontier/evidence/F-1/`](docs/frontier/evidence/F-1/). The experiment's entry in [`docs/frontier/frontier-log.md`](docs/frontier/frontier-log.md) is added when it ends.
+
 ## What runs today
 
 - **Rust core** (`core/crates/lfs_core`): three Automerge document types — profile, pings, threads — behind a typed UniFFI surface; SQLite persistence behind a single storage adapter that tags every row with its format. Expired pings are removed at the core on load when the caller supplies a clock (`open_typed_doc_at`); an unparseable expiry is retained, an unparseable clock is an error, and the clock-free `open_typed_doc` never reads the wall.
