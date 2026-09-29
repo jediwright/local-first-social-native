@@ -1,0 +1,11 @@
+title = "local-first-social-native"
+[extend]
+useDefault = true
+
+[[rules]]
+id = "raw-32-byte-hex-seed"
+description = "64 hex characters: the 32-byte seed shape"
+regex = '''\b[0-9a-fA-F]{64}\b'''
+keywords = []
+[rules.allowlist]
+paths = ['''(^|/)Cargo\.lock$''', '''(^|/)gradle-wrapper\.properties$''']
