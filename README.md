@@ -1,3 +1,6 @@
+> **This is the `frontier` branch: experimental work.**
+> Code here is exploratory and may be incomplete or broken. It is not the verified app. The tested, documented version is on [`main`](https://github.com/jediwright/local-first-social-native/tree/main). Work that proves out here is rebuilt on `main` separately; this branch is never merged into it.
+
 # local-first-social-native
 
 A small native iOS and Android app, with a shared Rust core, for a local-first social network. Working name; the project will be renamed before any public release.
