@@ -11,6 +11,8 @@ pub(crate) mod runtime;
 pub mod storage;
 #[cfg(test)]
 mod f1_cross_version;
+#[cfg(test)]
+mod f1_encrypted_content;
 
 use autosurgeon::{hydrate, reconcile, Hydrate, Reconcile};
 use docs::{PingsDoc, ProfileDoc, ThreadsDoc};

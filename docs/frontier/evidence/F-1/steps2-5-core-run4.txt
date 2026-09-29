@@ -1,0 +1,25 @@
+   Compiling lfs_core v0.0.0 (~/local-first-social-native/core/crates/lfs_core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.70s
+     Running unittests src/lib.rs (target/debug/deps/lfs_core-8d43936d99ca56eb)
+
+running 1 test
+F-1 step 2: encrypt produced a key update: true
+F-1 step 2: device Identifier(0x8c5b177eabf69baf…)
+F-1 step 2: peer   Identifier(0x549561b4b38c7ece…)
+F-1 step 2: doc    DocumentId(0xd0ede38c3f79fccf…)
+F-1 step 2: stored kinds ["CgkaOperation (own)", "CgkaOperation (own)", "CgkaOperation (own)", "CgkaOperation (own)", "Delegated", "Delegated (own)", "PrekeysExpanded (own)", "PrekeysExpanded (own)", "PrekeysExpanded (own)", "PrekeysExpanded (own)", "PrekeysExpanded (own)", "PrekeysExpanded (own)", "PrekeysExpanded (own)"]
+F-1 step 2: stored 13 event(s), 4 of them group-encryption operations
+F-1 step 2: peer pending after first sync: 0
+F-1: peer reads content before the restart: OK ("written before the restart")
+F-1 step 3c: secrets imported first; pending: 0
+F-1 step 3c: pending after replay: 3 ["CgkaOperation (own)", "CgkaOperation (own)", "Delegated (own)"]
+F-1 step 3c: CgkaOperation (own) refused: ReceiveCgkaOpError(PendingCgkaAuthorization(DocumentId(0xd0ede38c3f79fccf…)))
+F-1 step 3c: Delegated (own) refused: ReceiveStaticMembershipError(UnknownAgent(Identifier(0x549561b4b38c7ece…)))
+F-1 step 3c: CgkaOperation (own) refused: ReceiveCgkaOpError(CgkaError(OutOfOrderOperation))
+F-1 step 3c: group-encryption operations after replay: Ok(Some(2))
+F-1: 3c device reads old content: FAILED: KeyNotFound
+F-1: store file holds no seed and none of 8 exported secret(s)
+test f1_encrypted_content::f1_step3c_import_secrets_before_replay ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 58 filtered out; finished in 0.06s
+

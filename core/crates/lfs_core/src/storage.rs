@@ -35,6 +35,13 @@ pub const FORMAT_KEYHIVE_STATIC_DELEGATIONS_V1: &str = "keyhive.static-delegatio
 /// `.v1` names THAT shape; same never-re-tag rule as the delegation tag.
 pub const FORMAT_KEYHIVE_STATIC_EVENTS_V1: &str = "keyhive.static-events.bincode.v1";
 
+/// Frontier (F-1): `bincode` over `Vec<keyhive_core::event::static_event::
+/// StaticEvent<[u8; 32]>>` at Keyhive `35460ba1`, holding a document's full
+/// public event set, including its group-encryption operations. A separate
+/// tag because the `CgkaOperation` shape changed after `90fe4a51`. Public
+/// material only: no seed and no prekey or leaf secret is ever written here.
+pub const FORMAT_KEYHIVE_DOC_EVENTS_V1: &str = "keyhive.doc-events.bincode.v1";
+
 /// Run 36 H1 housekeeping (flagged at Run 30): the Keyhive pin label shown in
 /// `Core::pins()` lives with the adapter that owns the Keyhive bytes.
 /// Run 37 RE-RULED the display string alongside the first format tag: the
@@ -66,6 +73,8 @@ pub trait DocStore: Send + Sync {
     /// Run 38 — write Keyhive static-event bytes (the `KeyOp` row). Tag
     /// stamped HERE (H1), same upsert as the other writes. Additive.
     fn write_keyhive_static_events(&self, id: &str, bytes: &[u8]) -> rusqlite::Result<()>;
+    /// Frontier (F-1) — write a document's public event set. Tag stamped here.
+    fn write_keyhive_doc_events(&self, id: &str, bytes: &[u8]) -> rusqlite::Result<()>;
     /// Run 39 — the row ids under `prefix`, sorted. The group reload path
     /// enumerates its app-owned rows (`group:<app id>` / `group:<app id>.keyops`)
     /// with it; no format is assumed here — each row's tag is checked by the
@@ -127,6 +136,9 @@ impl DocStore for SqliteStore {
     }
     fn write_keyhive_static_events(&self, id: &str, bytes: &[u8]) -> rusqlite::Result<()> {
         self.upsert(id, FORMAT_KEYHIVE_STATIC_EVENTS_V1, bytes)
+    }
+    fn write_keyhive_doc_events(&self, id: &str, bytes: &[u8]) -> rusqlite::Result<()> {
+        self.upsert(id, FORMAT_KEYHIVE_DOC_EVENTS_V1, bytes)
     }
     fn ids_with_prefix(&self, prefix: &str) -> rusqlite::Result<Vec<String>> {
         let conn = self.conn.lock().unwrap();

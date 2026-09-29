@@ -1,0 +1,33 @@
+   Compiling lfs_core v0.0.0 (~/local-first-social-native/core/crates/lfs_core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.64s
+     Running unittests src/lib.rs (target/debug/deps/lfs_core-8d43936d99ca56eb)
+
+running 3 tests
+test f1_encrypted_content::f1_step3_reload_without_secrets ... F-1 step 2: encrypt produced a key update: true
+F-1 step 2: stored 13 event(s), 4 of them group-encryption operations
+F-1 step 2: peer pending after first sync: 0
+F-1: peer reads content before the restart: OK ("written before the restart")
+F-1 step 3: pending after replay: 5
+F-1 step 3: document present: true
+F-1 step 3: group-encryption operations after replay: Err(NotInitialized)
+F-1: device reads content from before the restart: FAILED: KeyNotFound
+F-1: store file holds no seed and none of 8 exported secret(s)
+ok
+test f1_encrypted_content::f1_step4_key_update_after_reload ... F-1 step 2: encrypt produced a key update: true
+F-1 step 2: stored 13 event(s), 4 of them group-encryption operations
+F-1 step 2: peer pending after first sync: 0
+F-1: peer reads content before the restart: OK ("written before the restart")
+F-1 step 4: key update FAILED: UnableToPcsUpdate(NotInitialized)
+F-1: store file holds no seed and none of 8 exported secret(s)
+ok
+test f1_encrypted_content::f1_step5_restore_exported_secrets ... F-1 step 2: encrypt produced a key update: true
+F-1 step 2: stored 13 event(s), 4 of them group-encryption operations
+F-1 step 2: peer pending after first sync: 0
+F-1: peer reads content before the restart: OK ("written before the restart")
+F-1 step 5: secrets imported; 3 event(s) still pending
+F-1: device reads content from before the restart: FAILED: KeyNotFound
+F-1: store file holds no seed and none of 8 exported secret(s)
+ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 54 filtered out; finished in 0.13s
+
