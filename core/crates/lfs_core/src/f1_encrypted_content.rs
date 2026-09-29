@@ -63,6 +63,13 @@ async fn sync_into(from: &Hive, to: &Hive, to_signer: &MemorySigner) -> usize {
     to.ingest_unsorted_static_events(evs).await.len()
 }
 
+/// Public identifiers are printed as prefixes only (charter rule 10).
+fn short(id: &impl std::fmt::Debug) -> String {
+    let full = format!("{id:?}");
+    let cut: String = full.chars().take(full.find("0x").map(|i| i + 18).unwrap_or(24)).collect();
+    format!("{cut}…")
+}
+
 fn report(what: &str, r: Result<Vec<u8>, impl std::fmt::Debug>) {
     match r {
         Ok(p) => println!("F-1: {what}: OK ({:?})", String::from_utf8_lossy(&p)),
@@ -108,9 +115,9 @@ fn setup(s: &SqliteStore, store_peer_key_op: bool) -> Setup {
             events.push(crate::ceremony::keyop_event(&card));
             println!("F-1 step 2: also storing the peer's key op from its contact card");
         }
-        println!("F-1 step 2: device {:?}", id_of(&device));
-        println!("F-1 step 2: peer   {:?}", id_of(&peer));
-        println!("F-1 step 2: doc    {:?}", doc);
+        println!("F-1 step 2: device {}", short(&id_of(&device)));
+        println!("F-1 step 2: peer   {}", short(&id_of(&peer)));
+        println!("F-1 step 2: doc    {}", short(&doc));
         let mut stored: Vec<String> = events.iter().map(|e| kind(e, &id_of(&device))).collect();
         stored.sort();
         println!("F-1 step 2: stored kinds {:?}", stored);

@@ -5,9 +5,9 @@
 running 1 test
 F-1 step 2: encrypt produced a key update: true
 F-1 step 2: also storing the peer's key op from its contact card
-F-1 step 2: device Identifier(0x9198dedd66d0b7789a5bbd0cddba52e9d0730cfb229536e15577d52295f4370b)
-F-1 step 2: peer   Identifier(0xb8ac40a67e268a39c52f36ca6d9992a5baa2787ec3c62e042eceaed724ef13a1)
-F-1 step 2: doc    DocumentId(0x8b04141662fb3546d2111723b6cb8c2456e255b93f927aee07b74ebe6f861828)
+F-1 step 2: device Identifier(0x9198dedd66d0b778…)
+F-1 step 2: peer   Identifier(0xb8ac40a67e268a39…)
+F-1 step 2: doc    DocumentId(0x8b04141662fb3546…)
 F-1 step 2: stored kinds ["CgkaOperation (own)", "CgkaOperation (own)", "CgkaOperation (own)", "CgkaOperation (own)", "Delegated", "Delegated (own)", "PrekeyRotated", "PrekeysExpanded (own)", "PrekeysExpanded (own)", "PrekeysExpanded (own)", "PrekeysExpanded (own)", "PrekeysExpanded (own)", "PrekeysExpanded (own)", "PrekeysExpanded (own)"]
 F-1 step 2: stored 14 event(s), 4 of them group-encryption operations
 F-1 step 2: peer pending after first sync: 0
