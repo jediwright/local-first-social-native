@@ -164,7 +164,7 @@ fn reload(device: &MemorySigner, s: &SqliteStore, drop_own_key_ops: bool) -> (Hi
 
 /// The rule every F-1 test ends with: the store file holds no seed and no
 /// exported secret.
-fn assert_no_secrets_on_disk(x: &Setup, s: SqliteStore, path: &str) {
+fn assert_no_secrets_on_disk(x: &Setup, s: SqliteStore, path: &str, more_secrets: &[&Vec<u8>]) {
     drop(s);
     let mut file = std::fs::read(path).unwrap();
     if let Ok(wal) = std::fs::read(format!("{path}-wal")) {
@@ -175,7 +175,13 @@ fn assert_no_secrets_on_disk(x: &Setup, s: SqliteStore, path: &str) {
     assert!(!contains(&x.peer.0.to_bytes()), "peer seed must not be on disk");
     let pairs: BTreeMap<[u8; 32], [u8; 32]> = bincode::deserialize(&x.secrets).expect("secret export shape");
     assert!(pairs.values().all(|sk| !contains(sk)), "no exported secret may be on disk");
-    println!("F-1: store file holds no seed and none of {} exported secret(s)", pairs.len());
+    let mut total = pairs.len();
+    for blob in more_secrets {
+        let more: BTreeMap<[u8; 32], [u8; 32]> = bincode::deserialize(blob).expect("secret export shape");
+        assert!(more.values().all(|sk| !contains(sk)), "no later exported secret may be on disk");
+        total += more.len();
+    }
+    println!("F-1: store file holds no seed and none of {total} exported secret(s)");
 }
 
 #[test]
@@ -193,7 +199,7 @@ fn f1_step3_reload_without_secrets() {
         );
         report("device reads content from before the restart", h2.try_decrypt_content(x.doc, x.old.encrypted_content()).await);
     });
-    assert_no_secrets_on_disk(&x, s, &path);
+    assert_no_secrets_on_disk(&x, s, &path, &[]);
 }
 
 #[test]
@@ -224,7 +230,7 @@ fn f1_step4_key_update_after_reload() {
         report("peer reads old content", x.peer_hive.try_decrypt_content(x.doc, x.old.encrypted_content()).await);
         report("device reads old content", h2.try_decrypt_content(x.doc, x.old.encrypted_content()).await);
     });
-    assert_no_secrets_on_disk(&x, s, &path);
+    assert_no_secrets_on_disk(&x, s, &path, &[]);
 }
 
 #[test]
@@ -240,7 +246,7 @@ fn f1_step5_restore_exported_secrets() {
         }
         report("device reads content from before the restart", h3.try_decrypt_content(x.doc, x.old.encrypted_content()).await);
     });
-    assert_no_secrets_on_disk(&x, s, &path);
+    assert_no_secrets_on_disk(&x, s, &path, &[]);
 }
 
 /// Diagnostic for step 3: replay everything, the device's own earlier key ops
@@ -271,7 +277,7 @@ fn f1_step3b_reload_keeping_own_key_ops() {
         }
         report("3b device reads old content, secrets restored", h2.try_decrypt_content(x.doc, x.old.encrypted_content()).await);
     });
-    assert_no_secrets_on_disk(&x, s, &path);
+    assert_no_secrets_on_disk(&x, s, &path, &[]);
 }
 
 /// Diagnostic: import the exported secrets into the fresh hive BEFORE replay,
@@ -305,7 +311,7 @@ fn f1_step3c_import_secrets_before_replay() {
         );
         report("3c device reads old content", h.try_decrypt_content(x.doc, x.old.encrypted_content()).await);
     });
-    assert_no_secrets_on_disk(&x, s, &path);
+    assert_no_secrets_on_disk(&x, s, &path, &[]);
 }
 
 /// The fix under test: store the peer's key op beside Keyhive's own export,
@@ -361,5 +367,66 @@ fn f1_step3d_store_peer_key_op_and_import_first() {
         report("3d peer reads new content", x.peer_hive.try_decrypt_content(x.doc, new.encrypted_content()).await);
         report("3d peer reads old content", x.peer_hive.try_decrypt_content(x.doc, x.old.encrypted_content()).await);
     });
-    assert_no_secrets_on_disk(&x, s, &path);
+    assert_no_secrets_on_disk(&x, s, &path, &[]);
+}
+
+/// Restart as the fixed path does: secrets imported first, then the stored
+/// events replayed (the device's own earlier key ops skipped).
+fn restore(device: &MemorySigner, s: &SqliteStore, secrets: &[u8]) -> (Hive, Vec<String>) {
+    let (tag, bytes) = s.read_tagged(ROW).unwrap().expect("doc events row");
+    assert_eq!(tag, FORMAT_KEYHIVE_DOC_EVENTS_V1);
+    let own = id_of(device);
+    let events: Events = bincode::deserialize::<Events>(&bytes)
+        .expect("decode doc events")
+        .into_iter()
+        .filter(|e| not_own_key_op(e, &own))
+        .collect();
+    let h = new_hive(device.clone());
+    let pending = rt(async {
+        h.import_prekey_secrets(secrets).await.expect("import secrets");
+        h.ingest_unsorted_static_events(events).await
+    });
+    let k = kinds(&pending, &own);
+    (h, k)
+}
+
+/// A second restart. After the first restart the device issues a key update
+/// and writes new content, then saves as the app would: the stored events are
+/// rewritten (Keyhive's export plus the key ops already stored) and the
+/// secrets are exported again. The second restart is tried twice: with the
+/// secrets saved before the key update, and with the ones saved after it.
+#[test]
+#[ignore]
+fn f1_step3e_second_restart() {
+    let (_dir, s, path) = temp_store();
+    let x = setup(&s, true);
+    let own = id_of(&x.device);
+    let (h1, pending) = restore(&x.device, &s, &x.secrets);
+    println!("F-1 step 3e: first restart pending: {} {:?}", pending.len(), pending);
+    let (new, secrets_after) = rt(async {
+        let (_, leaf) = h1.force_pcs_update(x.doc).await.expect("key update after first restart");
+        println!("F-1 step 3e: key update after first restart; new leaf secret returned: {}", leaf.is_some());
+        let new = h1.try_encrypt_content(x.doc, &[3u8; 32], &vec![[2u8; 32]], NEW_TEXT).await.expect("encrypt");
+        let (_, old_bytes) = s.read_tagged(ROW).unwrap().expect("doc events row");
+        let mut events: Events = bincode::deserialize(&old_bytes).expect("decode doc events");
+        events.extend(events_for(&h1, own).await);
+        let cgka = events.iter().filter(|e| matches!(e, StaticEvent::CgkaOperation(_))).count();
+        println!("F-1 step 3e: rewrote stored events: {} (with duplicates), {} group-encryption", events.len(), cgka);
+        s.write_keyhive_doc_events(ROW, &bincode::serialize(&events).expect("encode")).expect("rewrite row");
+        let secrets_after = h1.export_prekey_secrets().await.expect("export secrets again");
+        (new, secrets_after)
+    });
+    drop(h1);
+    let before: BTreeMap<[u8; 32], [u8; 32]> = bincode::deserialize(&x.secrets).unwrap();
+    let after: BTreeMap<[u8; 32], [u8; 32]> = bincode::deserialize(&secrets_after).unwrap();
+    println!("F-1 step 3e: secrets saved before the update: {}, after: {}", before.len(), after.len());
+    for (label, secrets) in [("secrets from before the key update", &x.secrets), ("secrets from after the key update", &secrets_after)] {
+        let (h2, pending) = restore(&x.device, &s, secrets);
+        println!("F-1 step 3e: second restart with {label}: pending {} {:?}", pending.len(), pending);
+        rt(async {
+            report(&format!("{label}: device reads old content"), h2.try_decrypt_content(x.doc, x.old.encrypted_content()).await);
+            report(&format!("{label}: device reads new content"), h2.try_decrypt_content(x.doc, new.encrypted_content()).await);
+        });
+    }
+    assert_no_secrets_on_disk(&x, s, &path, &[&secrets_after]);
 }

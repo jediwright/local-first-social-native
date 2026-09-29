@@ -1,0 +1,29 @@
+   Compiling lfs_core v0.0.0 (~/local-first-social-native/core/crates/lfs_core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.15s
+     Running unittests src/lib.rs (target/debug/deps/lfs_core-8d43936d99ca56eb)
+
+running 1 test
+F-1 step 2: encrypt produced a key update: true
+F-1 step 2: also storing the peer's key op from its contact card
+F-1 step 2: device Identifier(0x9198dedd66d0b7789a5bbd0cddba52e9d0730cfb229536e15577d52295f4370b)
+F-1 step 2: peer   Identifier(0xb8ac40a67e268a39c52f36ca6d9992a5baa2787ec3c62e042eceaed724ef13a1)
+F-1 step 2: doc    DocumentId(0x8b04141662fb3546d2111723b6cb8c2456e255b93f927aee07b74ebe6f861828)
+F-1 step 2: stored kinds ["CgkaOperation (own)", "CgkaOperation (own)", "CgkaOperation (own)", "CgkaOperation (own)", "Delegated", "Delegated (own)", "PrekeyRotated", "PrekeysExpanded (own)", "PrekeysExpanded (own)", "PrekeysExpanded (own)", "PrekeysExpanded (own)", "PrekeysExpanded (own)", "PrekeysExpanded (own)", "PrekeysExpanded (own)"]
+F-1 step 2: stored 14 event(s), 4 of them group-encryption operations
+F-1 step 2: peer pending after first sync: 0
+F-1: peer reads content before the restart: OK ("written before the restart")
+F-1 step 3e: first restart pending: 0 []
+F-1 step 3e: key update after first restart; new leaf secret returned: true
+F-1 step 3e: rewrote stored events: 28 (with duplicates), 9 group-encryption
+F-1 step 3e: secrets saved before the update: 8, after: 16
+F-1 step 3e: second restart with secrets from before the key update: pending 0 []
+F-1: secrets from before the key update: device reads old content: OK ("written before the restart")
+F-1: secrets from before the key update: device reads new content: FAILED: KeyNotFound
+F-1 step 3e: second restart with secrets from after the key update: pending 0 []
+F-1: secrets from after the key update: device reads old content: OK ("written before the restart")
+F-1: secrets from after the key update: device reads new content: OK ("written after the restart")
+F-1: store file holds no seed and none of 24 exported secret(s)
+test f1_encrypted_content::f1_step3e_second_restart ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 0.10s
+
