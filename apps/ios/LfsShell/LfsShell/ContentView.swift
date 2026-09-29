@@ -437,7 +437,7 @@ enum PingDisplay {
 /// synced, never migrated to another device). The cold admin seeds are NOT
 /// stored here or anywhere on the device.
 enum Keychain {
-    static let service = "social.localfirst.shell"
+    static let service = "social.localfirst.shell.frontier"
     static let account = "device-seed"
 
     static func storeDeviceSeed(_ seed: Data) -> Bool {

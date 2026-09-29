@@ -14,7 +14,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "social.localfirst.shell"
+        applicationId = "social.localfirst.shell.frontier"
         minSdk = 24
         targetSdk = 37
         versionCode = 1
