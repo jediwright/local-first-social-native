@@ -933,6 +933,37 @@ mod tests {
         assert!(!contains(&rec.device_key.device_secret), "the lost device's seed is not on disk either");
         assert!(!contains(&report.device_key.device_secret), "the new device seed is exported, never persisted");
         assert!(contains(&pk(&report.device_key.device_fingerprint)), "its public half is in the rewritten row");
+
+        // Frontier F-1 (step 6) — the document-events row: a document's public
+        // events, group-encryption operations included, are written to the
+        // store; the device's exported secrets are held in memory only. Neither
+        // the device seed nor any exported secret may be on disk afterwards.
+        let s = SqliteStore::open(&path).unwrap();
+        let device = MemorySigner::generate(&mut OsRng);
+        let device_seed = device.0.to_bytes();
+        let (events_bytes, secrets) = crate::runtime::rt().block_on(async {
+            let hive: Hive = Keyhive::generate(device, MemoryCiphertextStore::new(), NoListener, OsRng).await.unwrap();
+            let doc = hive.generate_doc(vec![], nonempty![[1u8; 32]]).await.unwrap();
+            hive.try_encrypt_content(doc, &[2u8; 32], &vec![], b"F-1 step 6").await.unwrap();
+            let events: Vec<StaticEvent<[u8; 32]>> = hive.static_events_for_agent(hive.id()).await.into_values().collect();
+            assert!(
+                events.iter().any(|e| matches!(e, StaticEvent::CgkaOperation(_))),
+                "the row carries group-encryption operations"
+            );
+            (bincode::serialize(&events).unwrap(), hive.export_prekey_secrets().await.unwrap())
+        });
+        s.write_keyhive_doc_events("f1-doc-events", &events_bytes).unwrap();
+        drop(s);
+        let mut file = std::fs::read(&path).unwrap();
+        if let Ok(wal) = std::fs::read(format!("{path}-wal")) {
+            file.extend(wal);
+        }
+        let contains = |needle: &[u8]| file.windows(needle.len()).any(|w| w == needle);
+        assert!(contains(&events_bytes[..64]), "the document-events row is on disk");
+        assert!(!contains(&device_seed), "the device seed is not on disk");
+        let pairs: std::collections::BTreeMap<[u8; 32], [u8; 32]> = bincode::deserialize(&secrets).unwrap();
+        assert!(!pairs.is_empty());
+        assert!(pairs.values().all(|sk| !contains(sk)), "no exported secret is on disk");
     }
 
     /// H2 — first caller of the floor: with one admin delegation the policy

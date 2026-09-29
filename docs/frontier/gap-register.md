@@ -2,7 +2,7 @@
 
 Gaps this app has found in the Ink & Switch local-first stack, Keyhive first. Each gap is worked around in the app where possible; see [`CHARTER.md`](CHARTER.md) for when a gap moves on to a local patch or an upstream pull request. Experiments that touch a gap are logged in [`frontier-log.md`](frontier-log.md) and cite it by number.
 
-The app pins Keyhive at `90fe4a51` (`keyhive_core`, `keyhive_crypto`). File and line references below are at that version unless marked otherwise.
+`main` pins Keyhive at `90fe4a51` (`keyhive_core`, `keyhive_crypto`); `frontier` moved to `35460ba` during F-1. File and line references below are at `90fe4a51` unless marked otherwise.
 
 ## Fields
 
@@ -38,7 +38,7 @@ Each gap records:
 
 **Next step:** Ask in `#keyhive` whether a public delegation-only add on a reloaded document is intended.
 
-**Experiments:** none yet.
+**Experiments:** F-1, related. With the document's group-encryption operations stored and replayed, a reloaded document does have that state (see G-3). Adding a member to such a document was not tested.
 
 ---
 
@@ -68,7 +68,7 @@ Each gap records:
 
 **Evidence:** Run 40 entry in `docs/phase0-observation-log.md`; the app's storage format tags in `core/crates/lfs_core/src/storage.rs` L27 and L36.
 
-**Latest Keyhive:** Not applicable; this is an app design question. Keyhive's `main` has added public group-encryption functions since the pin (`cgka_members`, `merge_cgka_op`), which may affect the design.
+**Latest Keyhive:** Not applicable; this is an app design question. `cgka_members` and `merge_cgka_op` were already public at the pin; at `35460ba` both changed shape (`cgka_members` takes `&mut self`, `merge_cgka_op` takes an owner ID). The group-encryption operation type itself changed too, so a row storing those operations is tied to the Keyhive version that wrote it.
 
 **Workaround in the app:** Not needed yet.
 
@@ -76,7 +76,7 @@ Each gap records:
 
 **Next step:** Keep local. Parked until Phase 2 decides whether it needs content encryption on reloaded documents.
 
-**Experiments:** none yet.
+**Experiments:** F-1. At `35460ba`, a row holding a document's public events, group-encryption operations included (`keyhive.doc-events.bincode.v1`), rebuilds the document's encryption state on reload. It works only if the device's secrets are imported before replay and the prekey events of members the device added are stored too (see G-5). Across two restarts the device and a peer read old and new content, with no seed or secret on disk. The secrets have to be saved again after every change that rotates a key, including an ordinary encryption.
 
 ---
 
@@ -86,7 +86,7 @@ Each gap records:
 
 **Evidence:** Format tags `keyhive.static-delegations.bincode.v1` and `keyhive.static-events.bincode.v1` (`core/crates/lfs_core/src/storage.rs` L27, L36); the consumer evidence notes in `docs/` measure what's stored and what a change would cost.
 
-**Latest Keyhive:** Not checked. `main` at `35460ba` is 16 commits past the pin, including a version bump and several group-encryption changes. The stored types need to be compared before the pin moves.
+**Latest Keyhive:** Checked on 2026-09-29 against `35460ba`. The types behind both stored formats are unchanged. Rows written at `90fe4a51` decode and re-encode byte for byte at `35460ba`, and reload the same members at the same access levels (F-1 step 1). The group-encryption operation type did change, which matters for any row that stores those operations (see G-3).
 
 **Workaround in the app:** Every row carries a format tag, so a future format can sit beside the old one and be migrated.
 
@@ -94,4 +94,24 @@ Each gap records:
 
 **Next step:** Keep local; the evidence notes are already public.
 
-**Experiments:** none yet.
+**Experiments:** F-1.
+
+---
+
+## G-5 — A device's own event export leaves out the members it added
+
+**Gap:** For a document the device made and shared, `static_events_for_agent` for the device returns the document's delegations, the device's own prekey events and the group-encryption operations, but not the prekey event of the member it added. A device rebuilt from that set alone refuses its own delegation of that member, and the encryption operations that depend on it stay pending, so no content can be read.
+
+**Evidence (at `35460ba`):**
+- F-1 runs 3 and 4 (`evidence/F-1/`): every stored prekey event was the device's own. The device's delegation of the peer was refused with `UnknownAgent` naming the peer, and the peer's add waited with `PendingCgkaAuthorization`.
+- `keyhive_core/src/keyhive.rs` L1246: `reachable_prekey_ops_for_agent` reads as though it should include the prekey events of a document's members (L1310–1334). So the cause isn't known yet. It may be a bug, or a result of how the app uses the call.
+
+**Latest Keyhive:** Found on 2026-09-29 at `35460ba`, Keyhive's current `main`.
+
+**Workaround in the app:** Store the prekey event from each added member's contact card beside Keyhive's export, as the app already does for groups. With that, the document replays completely (F-1 run 5). The member's event is a `PrekeyRotated`, as contact cards produced at the old pin too.
+
+**Possible fix:** First find why the member's prekey event is left out. Level 0 while the cause is unknown; level 1 or upstream if it turns out to be in Keyhive.
+
+**Next step:** Keep local until the cause is narrowed down, then ask in `#keyhive` or open an issue.
+
+**Experiments:** F-1.
