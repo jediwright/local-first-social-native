@@ -70,11 +70,11 @@ Each gap records:
 
 **Latest Keyhive:** Not applicable; this is an app design question. `cgka_members` and `merge_cgka_op` were already public at the pin; at `35460ba` both changed shape (`cgka_members` takes `&mut self`, `merge_cgka_op` takes an owner ID). The group-encryption operation type itself changed too, so a row storing those operations is tied to the Keyhive version that wrote it.
 
-**Workaround in the app:** Not needed yet.
+**Workaround in the app:** None yet. F-1 is trying the possible fix below on the `frontier` branch.
 
 **Possible fix:** Store group-encryption operations as a new row type under a new format tag. Level 0, in the app. It would change the persistence-absence test (charter rule 3) and has consequences for sync.
 
-**Next step:** Keep local. Parked until Phase 2 decides whether it needs content encryption on reloaded documents.
+**Next step:** Keep local. F-1 is testing the fix on `frontier`. Whether the app adopts it depends on Phase 2 deciding whether it needs content encryption on reloaded documents.
 
 **Experiments:** F-1. At `35460ba`, a row holding a document's public events, group-encryption operations included (`keyhive.doc-events.bincode.v1`), rebuilds the document's encryption state on reload. It works only if the device's secrets are imported before replay and the prekey events of members the device added are stored too (see G-5). Across two restarts the device and a peer read old and new content, with no seed or secret on disk. The secrets have to be saved again after every change that rotates a key, including an ordinary encryption.
 
@@ -106,7 +106,7 @@ Each gap records:
 - F-1 runs 3 and 4 (`evidence/F-1/`): every stored prekey event was the device's own. The device's delegation of the peer was refused with `UnknownAgent` naming the peer, and the peer's add waited with `PendingCgkaAuthorization`.
 - `keyhive_core/src/keyhive.rs` L1246: `reachable_prekey_ops_for_agent` reads as though it should include the prekey events of a document's members (L1310–1334). So the cause isn't known yet. It may be a bug, or a result of how the app uses the call.
 
-**Latest Keyhive:** Found on 2026-09-29 at `35460ba`, Keyhive's current `main`.
+**Latest Keyhive:** Found on 2026-09-29 at `35460ba`, Keyhive's `main` as of that date.
 
 **Workaround in the app:** Store the prekey event from each added member's contact card beside Keyhive's export, as the app already does for groups. With that, the document replays completely (F-1 run 5). The member's event is a `PrekeyRotated`, as contact cards produced at the old pin too.
 
