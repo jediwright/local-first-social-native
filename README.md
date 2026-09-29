@@ -1,5 +1,6 @@
 > **This is the `frontier` branch: experimental work.**
 > Code here is exploratory and may be incomplete or broken. It is not the verified app. The tested, documented version is on [`main`](https://github.com/jediwright/local-first-social-native/tree/main). Work that proves out here is rebuilt on `main` separately; this branch is never merged into it.
+> How this branch works: [`docs/frontier/CHARTER.md`](docs/frontier/CHARTER.md).
 
 # local-first-social-native
 
