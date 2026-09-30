@@ -1,0 +1,38 @@
+A possible fix for G-5, tested against Keyhive alone.
+
+Gap:        G-5 (docs/frontier/gap-register.md)
+Keyhive:    inkandswitch/keyhive @ 35460ba125f2358c7ef39deb5f6bbe2b61230582 (main on 2026-09-29)
+Changes:    keyhive_core/src/principal/individual/op.rs: KeyOp::topsort also starts from
+            rotations whose earlier key isn't in the set (10 lines added, none removed)
+Apply:      git apply G-5-topsort-fix.patch   (from the Keyhive checkout's root; apply
+            G-5-repro.patch as well to run the reproduction)
+Run:        cargo test -p keyhive_core --test g5_own_export -- --nocapture --test-threads=1
+            cargo test -p keyhive_core
+Output:     docs/frontier/evidence/G-5/run3.txt (reproduction), run3-suite.txt (all of keyhive_core)
+Result:     reproduction 9 of 9 pass (4 fail without this change); keyhive_core's own tests
+            269 pass, 0 fail, 3 already ignored upstream
+Status:     tested in a local Keyhive checkout only; the app's build does not use it; offered
+            on Keyhive issue #206, not opened as a pull request
+License:    Keyhive is Apache-2.0 at this rev
+
+diff --git a/keyhive_core/src/principal/individual/op.rs b/keyhive_core/src/principal/individual/op.rs
+index 2313520..ff40304 100644
+--- a/keyhive_core/src/principal/individual/op.rs
++++ b/keyhive_core/src/principal/individual/op.rs
+@@ -52,6 +52,16 @@ impl KeyOp {
+             }
+         }
+ 
++        // G-5: a rotate whose `old` key is not produced by any op in this set
++        // (e.g. a contact card's lone rotate) is also a root.
++        let produced: HashSet<ShareKey> =
++            key_ops.values().map(|op| *op.new_key()).collect();
++        for (old, ops) in rotate_key_ops.iter() {
++            if !produced.contains(old) {
++                heads.extend(ops.iter().map(|op| op.dupe()));
++            }
++        }
++
+         let mut topsorted = vec![];
+ 
+         while let Some(head) = heads.pop() {

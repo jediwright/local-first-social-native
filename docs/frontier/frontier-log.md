@@ -109,3 +109,54 @@ checks:       gitleaks clean (76 commits) · cargo audit clean: no vulnerabiliti
               at 35460ba1; crates.io keyhive_core 0.5.0 locked only for the optional
               subduction feature, not in the default build) · app IDs unchanged yes
 ```
+
+```
+exp:          F-2 — G-5's cause, tested with a local change to Keyhive
+date:         2026-09-30
+base:         frontier@be2b685 · keyhive 35460ba1 (+ local patch patches/G-5-topsort-fix.patch,
+              with patches/G-5-repro.patch; in a Keyhive checkout only, no app code)
+question:     Is KeyOp::topsort leaving out a contact card's lone rotate the whole cause of G-5?
+tried:        In a local Keyhive checkout at 35460ba1, changed KeyOp::topsort to also start from
+              rotations whose earlier key isn't in the set (10 lines added, none removed). Reran
+              the G-5 reproduction and all of keyhive_core's own tests. No app code or app build
+              changed.
+result:       Held:
+              - All 9 reproduction tests pass; 4 failed without the change. The sort keeps a
+                card's lone rotate (1 in, 1 out). The device's export carries the key event of a
+                member introduced by contact card. An instance rebuilt from that export applies
+                every event (0 pending), the member has Edit, and content decrypts.
+              - The relay case from Keyhive issue #206: the relay applies all of the sender's
+                events (0 pending), learns the member, and the member reads.
+              - keyhive_core's own tests: 269 pass, 0 fail, 3 already ignored upstream.
+              Broke: nothing.
+              Evidence: evidence/G-5/run3.txt, evidence/G-5/run3-suite.txt.
+gap:          G-5
+outcome:      park — the fix belongs in Keyhive, not this app; offered on #206; the app keeps its
+              workaround until Keyhive changes
+checks:       gitleaks clean (80 commits) · cargo audit clean: no vulnerabilities; 4 allowed
+              warnings, unchanged from F-1 · cold_keys_are_exported_and_never_persisted pass;
+              extended no (no app change) · keyhive version recorded yes (35460ba1; the patch
+              applied only in a local Keyhive checkout, not in the app's build) · app IDs
+              unchanged yes
+```
+
+```
+exp:          F-1 — outcome revised: promote
+date:         2026-09-30
+base:         frontier@be2b685 · keyhive 35460ba1 (no local patch in the app)
+question:     F-1 was parked until G-5's cause was settled. Is it settled?
+tried:        Nothing new in the app. F-2 tested the cause in Keyhive alone.
+result:       G-5's cause is KeyOp::topsort leaving out a contact card's lone rotate; one change
+              to the sort clears every failing case (F-2). The app's workaround, storing each
+              added member's contact-card event beside Keyhive's export, supplies exactly the
+              event the sort leaves out. If Keyhive fixes the sort, those stored events become
+              redundant, not wrong.
+gap:          G-3, G-5
+outcome:      promote — the condition F-1 was parked on is met; a fresh build on main would keep
+              the workaround and cite G-5 and Keyhive issue #206
+checks:       gitleaks clean (80 commits) · cargo audit clean: no vulnerabilities; 4 allowed
+              warnings, unchanged from F-1 · cold_keys_are_exported_and_never_persisted pass;
+              extended no (no app change) · keyhive version recorded yes (35460ba1; the patch
+              applied only in a local Keyhive checkout, not in the app's build) · app IDs
+              unchanged yes
+```

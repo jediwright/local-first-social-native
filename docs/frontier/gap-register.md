@@ -74,7 +74,7 @@ Each gap records:
 
 **Possible fix:** Store group-encryption operations as a new row type under a new format tag. Level 0, in the app. It would change the persistence-absence test (charter rule 3) and has consequences for sync.
 
-**Next step:** Keep local. F-1 showed the fix works on `frontier` under stated conditions and is parked until G-5's cause is settled. Whether the app adopts it also depends on Phase 2 deciding whether it needs content encryption on reloaded documents.
+**Next step:** Keep local. F-1 showed the fix works on `frontier` under stated conditions. It was parked until G-5's cause was settled, and was promoted on 2026-09-30 once F-2 settled it, so it's now a candidate for a fresh build on `main` that keeps the G-5 workaround. Whether the app adopts it also depends on Phase 2 deciding whether it needs content encryption on reloaded documents.
 
 **Experiments:** F-1. At `35460ba`, a row holding a document's public events, group-encryption operations included (`keyhive.doc-events.bincode.v1`), rebuilds the document's encryption state on reload, given two conditions: the prekey events of members the device added are stored too (see G-5), and the device's current secrets are imported. Once the members' events are stored, the order of import and replay doesn't matter. Only a document's first encryption and an explicit key update change the secrets, so they have to be saved again after those; secrets saved earlier still read everything encrypted before the key update. Across restarts the device and a peer read old and new content, in the core and on an Android emulator and an iPhone (F-1 step 7), with no seed or secret on disk.
 
@@ -110,12 +110,12 @@ Each gap records:
 - `keyhive_core/src/principal/individual/op.rs` L37–68 (`KeyOp::topsort`), applied by `reachable_prekey_ops_for_agent` (`keyhive.rs` L1246, L1337–1339). `Keyhive::generate_contact_card` returns a rotate (`keyhive.rs` L345–354).
 - In the app: F-1 runs 3 and 4 and step 7d show the same failure.
 
-**Latest Keyhive:** Reproduced on 2026-09-29 at `35460ba`, Keyhive's `main` as of that date.
+**Latest Keyhive:** Reproduced on 2026-09-29 at `35460ba`, Keyhive's `main` as of that date. Still `main`, unchanged, on 2026-09-30.
 
 **Workaround in the app:** Store the prekey event from each added member's contact card beside Keyhive's export, as the app already does for groups. This supplies the one event the sort leaves out, and the document replays completely (F-1 run 5).
 
-**Possible fix:** In Keyhive, `KeyOp::topsort` could also start from rotations whose earlier key isn't in the set. Level 1 to try locally; upstream only by a deliberate decision. The app keeps its workaround (level 0) until Keyhive changes.
+**Possible fix:** In Keyhive, `KeyOp::topsort` also starts from rotations whose earlier key isn't in the set. Tried at level 1 in a local Keyhive checkout at `35460ba` (F-2): [`patches/G-5-topsort-fix.patch`](patches/G-5-topsort-fix.patch) adds 10 lines and removes none. With it, all nine reproduction tests pass, the relay case included, and Keyhive's own `keyhive_core` tests still pass (269 pass, 0 fail, 3 already ignored upstream). Output is in `evidence/G-5/run3.txt` and `evidence/G-5/run3-suite.txt`. The change is Keyhive's to make; the app keeps its workaround (level 0) until Keyhive changes. If it does, the stored member events become redundant rather than wrong.
 
-**Next step:** Commented on Keyhive issue #206 on 2026-09-29 with the reproduction and the version ([comment](https://github.com/inkandswitch/keyhive/issues/206#issuecomment-5902241890)); #206's sender also learns the member from a contact card, so the cause is likely the same. Wait for a maintainer's reply there. Confirming the cause with a local change to `KeyOp::topsort` (level 1, scratch clone only) is optional.
+**Next step:** Commented on Keyhive issue #206 on 2026-09-29 with the reproduction and the version ([comment](https://github.com/inkandswitch/keyhive/issues/206#issuecomment-5902241890)); #206's sender also learns the member from a contact card, so the cause is likely the same. Followed up on 2026-09-30 with the tested fix and an offer to open a pull request ([comment](https://github.com/inkandswitch/keyhive/issues/206#issuecomment-5902559650)). Wait for a maintainer's reply there. A pull request is level 2 and needs its own decision.
 
-**Experiments:** F-1 (core runs 3 and 4; step 7d reproduces it on an Android emulator and an iPhone).
+**Experiments:** F-1 (core runs 3 and 4; step 7d reproduces it on an Android emulator and an iPhone); F-2 (the fix, tested in Keyhive alone).

@@ -1,0 +1,416 @@
+   Compiling keyhive_core v0.6.0 (/Users/jediwright/scratch/keyhive-g5/keyhive_core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 14.32s
+     Running unittests src/lib.rs (target/debug/deps/keyhive_core-2eb879eaccc66942)
+
+running 88 tests
+test event::tests::test_event_now_decryptable ... ok
+test keyhive::tests::test_add_member ... ok
+test keyhive::tests::membership_predicates_consult_correct_registry ... ok
+test keyhive::tests::test_archival_round_trip ... ok
+test keyhive::tests::test_a_second_route_does_not_add_a_member_to_the_tree_twice ... ok
+test keyhive::tests::prekey_rotations_received_after_a_delegation_are_all_reachable ... ok
+test keyhive::tests::test_loading_archive_after_revoking_delegation ... ok
+test keyhive::tests::test_receive_delegations_associatively ... ok
+test keyhive::tests::test_revoking_a_member_reports_the_removal_in_cgka_ops ... ok
+test keyhive::tests::test_add_member_refuses_when_the_key_agreement_is_not_initialized ... ok
+test keyhive::tests::test_async_transaction ... ok
+test keyhive::tests::receiving_an_event_with_added_or_rotated_prekeys_works ... ok
+test listener::log::tests::the_log_returns_what_was_emitted ... ok
+test keyhive::tests::test_revoking_a_subgroup_reports_its_members_removals_in_cgka_ops ... ok
+test principal::active::tests::test_import_invalid_bytes ... ok
+test keyhive::tests::test_membership_ops_for_all_agents_matches_per_agent ... ok
+test keyhive::tests::test_peer_sees_other_peer_access_via_group ... ok
+test principal::active::tests::test_export_import_prekey_secrets ... ok
+test principal::active::tests::test_seal ... ok
+test principal::group::membership_operation::tests::ancestors::test_singleton ... ok
+test principal::group::membership_operation::tests::ancestors::test_concurrent ... ok
+test principal::group::membership_operation::tests::ancestors::test_two_direct ... ok
+test principal::group::membership_operation::tests::ancestors::test_revocation ... ok
+test keyhive::tests::test_cgka_ops_for_all_agents_matches_per_agent ... ok
+test principal::group::membership_operation::tests::ancestors::test_longer ... ok
+test principal::group::membership_operation::tests::topsort::test_concurrent_revocations_deterministic_order ... ok
+test principal::group::membership_operation::tests::topsort::test_concurrent_revocations_ordered_by_chain_length ... ok
+test principal::group::membership_operation::tests::topsort::test_deep_delegate_revoke_chain ... ok
+test principal::group::membership_operation::tests::topsort::test_empty ... ok
+test principal::group::membership_operation::tests::topsort::test_delegation_sequence ... ok
+test principal::group::membership_operation::tests::topsort::test_delegation_concurrency ... ok
+test principal::group::membership_operation::tests::topsort::revocation_cycles::test_3_cycle_all_permutations ... ok
+test principal::group::membership_operation::tests::topsort::revocation_cycles::test_2_cycle_all_permutations ... ok
+test principal::group::membership_operation::tests::topsort::test_one_delegation ... ok
+test keyhive::tests::test_transitive_ops_for_agent ... ok
+test principal::group::membership_operation::tests::topsort::test_one_revocation ... ok
+test keyhive::tests::test_reachable_prekey_ops_for_all_agents_matches_per_agent ... ok
+test principal::group::membership_operation::tests::topsort::test_three_concurrent_revocations ... ok
+test principal::group::membership_operation::tests::topsort::test_longer_delegation_chain ... ok
+test principal::group::membership_operation::tests::topsort::test_isolated_root_in_leftovers ... ok
+test principal::group::membership_operation::tests::topsort::test_reverse_topsort_stability_under_input_permutation ... ok
+test principal::group::tests::test_add_member_beyond_the_weakest_link_is_refused ... ok
+test principal::group::tests::test_add_member ... ok
+test principal::group::tests::test_revocation_beyond_the_weakest_link_is_refused ... ok
+test principal::group::tests::test_forged_delegation_beyond_the_weakest_link_is_refused ... ok
+test principal::group::tests::test_transitive_caps_a_member_by_their_own_delegations ... ok
+test principal::group::tests::test_transitive_keeps_the_best_route ... ok
+test principal::group::tests::test_transitive_cycles ... ok
+test principal::group::tests::test_revoke_member ... ok
+test principal::group::tests::test_transitive_one ... ok
+test principal::group::tests::test_transitive_self ... ok
+test principal::individual::tests::test_clamp_keeps_in_range ... ok
+test principal::individual::tests::test_clamp_keeps_in_range_2 ... ok
+test principal::individual::tests::test_pseudorandom_generates_random_values ... ok
+test principal::individual::tests::test_clamp_sequence ... ok
+test principal::individual::tests::test_pseudorandom_in_range ... ok
+test principal::individual::state::tests::test_rebuild ... ok
+test store::ciphertext::tests::test_hash_map_get_ciphertext ... ok
+test util::topsort::tests::add_dependency_after_partial_drain ... ok
+test util::topsort::tests::cycle_detected ... ok
+test util::topsort::tests::diamond ... ok
+test principal::individual::tests::test_pseudorandom_generates_stays_in_range ... ok
+test principal::group::tests::test_transitive_two ... ok
+test principal::individual::tests::test_to_bytes ... ok
+test principal::group::tests::test_transitive_weakest_link_is_the_first_one ... ok
+test util::topsort::tests::duplicate_edges_are_idempotent ... ok
+test util::topsort::tests::linear_chain ... ok
+test util::topsort::tests::mixed_cycle_and_acyclic ... ok
+test util::topsort::tests::empty ... ok
+test util::topsort::tests::isolated_nodes ... ok
+test principal::group::tests::test_transitive_three ... ok
+test principal::group::membership_operation::tests::topsort::revocation_cycles::test_4_cycle_all_permutations ... ok
+test principal::group::membership_operation::tests::topsort::test_many_revocations ... ok
+test principal::group::membership_operation::tests::topsort::test_causal_ordering_invariant ... ok
+test util::topsort::tests::self_loop_is_a_cycle ... ok
+test util::topsort::tests::single_node ... ok
+test util::topsort::tests::three_node_cycle ... ok
+test util::topsort::tests::wide_fan_in ... ok
+test util::topsort::tests::wide_fan_out ... ok
+test util::topsort::tests::proptests::prop_mid_drain_edge_respected ... ok
+test util::topsort::tests::proptests::prop_no_edges_single_batch ... ok
+test util::topsort::tests::proptests::prop_linear_chain_produces_singleton_batches ... ok
+test util::topsort::tests::proptests::prop_batch_members_are_concurrent ... ok
+test util::topsort::tests::proptests::prop_all_nodes_emitted ... ok
+test util::topsort::tests::proptests::prop_isolated_nodes_dont_affect_order ... ok
+test util::topsort::tests::proptests::prop_respects_dependencies ... ok
+test principal::group::tests::test_transitive_keeps_the_best_route_through_a_nested_group ... ok
+test util::topsort::tests::proptests::prop_deterministic ... ok
+
+test result: ok. 88 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+
+     Running tests/access_control.rs (target/debug/deps/access_control-fc085206eb82e564)
+
+running 27 tests
+test a_relay_member_of_a_document_gets_no_key ... ok
+test a_relay_member_added_to_a_group_that_already_holds_a_document_gets_no_key ... ok
+test a_document_that_was_never_received_cannot_be_named_as_relevant ... ok
+test a_reader_in_a_group_that_only_relays_a_document_gets_no_key ... ok
+test a_relay_member_of_a_group_gets_no_key_for_a_document_it_edits ... ok
+test a_membership_cycle_still_resolves ... ok
+test admin_on_a_parent_doc_reaches_the_child_doc ... ok
+test an_unknown_id_causes_empty_query_and_failed_operation ... ok
+test a_group_member_reaches_the_groups_documents ... ok
+test a_revoked_member_cannot_read_new_content ... ok
+test content_from_another_document_is_signed_into_the_delegation ... ok
+test an_attenuated_second_route_does_not_lower_reported_access ... ok
+test a_reader_cannot_delegate_above_read ... ok
+test members_are_listed_with_their_effective_level ... ok
+test a_revoked_member_cannot_delegate_or_revoke ... ok
+test promoting_a_relay_member_to_read_within_a_group_grants_a_key ... ok
+test relaying_a_group_relays_its_documents_without_a_key ... ok
+test revoking_a_group_takes_the_key_from_a_member_who_only_relays_directly ... ok
+test a_transitive_admin_through_a_group_can_delegate ... ok
+test a_transitive_admin_through_a_document_can_delegate ... ok
+test a_transitive_reader_cannot_delegate_above_read ... ok
+test what_an_agent_reaches_covers_groups_as_well_as_documents ... ok
+test multi_route_resolution_is_deterministic ... ok
+test two_replicas_agree_on_access_for_a_doc ... ok
+test revoking_a_group_removes_only_those_who_needed_it ... ok
+test relay_never_permits_decryption ... ok
+test attenuation_is_the_minimum_along_the_route ... ok
+
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.81s
+
+     Running tests/archive.rs (target/debug/deps/archive-835a457c8ff6ba46)
+
+running 8 tests
+test ingesting_an_archive_carries_the_key_state_as_well_as_the_graph ... ignored, ingesting an archive brings the membership graph but not the key state
+test a_rebuilt_instance_can_write_and_walk_back ... ok
+test ingesting_an_archive_merges_into_a_live_instance ... ok
+test an_archive_merged_into_a_rebuild_reaches_a_readable_state ... ok
+test an_instance_caught_up_by_syncing_can_read_what_it_missed ... ok
+test a_restored_instance_can_still_issue_delegations ... ok
+test an_archive_round_trip_preserves_members_access_and_decryption ... ok
+test an_old_archive_merged_with_later_events_converges ... ok
+
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/causal.rs (target/debug/deps/causal-99e1f7d05fac3a26)
+
+running 9 tests
+test an_ancestor_the_entrypoint_lists_is_reported_when_missing ... ignored, an ancestor the entrypoint lists is dropped from the report when it is missing
+test content_that_is_not_an_ancestor_is_not_captured_in_the_walk ... ok
+test a_reader_walks_back_through_the_ancestors_it_holds ... ok
+test an_ancestor_that_is_not_held_is_reported_rather_than_failing ... ok
+test a_later_member_recovers_earlier_content_by_walking_back ... ok
+test a_walk_from_two_heads_reads_their_shared_ancestor_once ... ok
+test two_missing_ancestors_are_each_reported_with_their_own_key ... ok
+test a_walk_consumes_the_content_it_reads ... ok
+test a_reader_can_name_an_ancestor_they_decrypted_rather_than_wrote ... ok
+
+test result: ok. 8 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running tests/cgka_authz.rs (target/debug/deps/cgka_authz-1e3627a0ca2ae1dd)
+
+running 24 tests
+test a_creator_delegated_as_admin_twice_can_still_process_their_founding_add ... ok
+test a_remove_citing_a_revocation_of_access_below_read_is_denied ... ok
+test a_non_member_cannot_remove_a_member ... ok
+test a_non_member_cannot_add_themselves ... ok
+test a_remove_cannot_evict_the_wrong_subject ... ok
+test a_remove_cannot_cite_a_revocation_issued_by_public ... ok
+test a_founding_delegation_cannot_seat_an_outsider ... ok
+test a_remove_citing_a_revocation_not_yet_received_is_pending ... ok
+test a_member_who_did_not_found_the_document_cannot_enact_a_founding_delegation ... ok
+test a_non_member_cannot_update_another_members_leaf ... ok
+test a_rotation_of_another_members_leaf_is_denied ... ok
+test an_add_cannot_cite_a_delegation_issued_by_public ... ok
+test a_remove_citing_a_revocation_over_another_resource_is_pending ... ok
+test an_add_cannot_cite_a_delegation_below_read ... ok
+test an_add_through_a_delegation_to_ourselves_for_someone_else_is_denied ... ok
+test an_add_granting_more_than_its_subject_reaches_here_is_pending ... ok
+test an_add_cannot_target_the_wrong_subject ... ok
+test an_add_citing_a_delegation_over_another_resource_is_pending ... ok
+test an_add_citing_a_delegation_not_yet_received_is_pending ... ok
+test the_creators_own_add_is_accepted_again_when_it_is_redelivered ... ok
+test the_creator_cannot_update_another_members_leaf ... ok
+test a_remove_through_an_individual_is_applied_once_the_individual_is_promoted_to_a_group ... ok
+test an_add_through_a_group_is_still_applied_to_cgka_graph_after_member_revoked_from_group ... ok
+test an_add_through_an_individual_is_applied_once_the_individual_is_promoted_to_a_group ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/concurrent_instances.rs (target/debug/deps/concurrent_instances-a067203405f7af09)
+
+running 3 tests
+test a_forged_leaf_key_still_leaves_one_key_at_the_leaf ... ok
+test writes_made_during_a_partition_survive_the_merge ... ok
+test the_instance_that_lost_the_leaf_reads_again_once_it_has_the_winning_secret ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running tests/content.rs (target/debug/deps/content-6657588a0ef60b8c)
+
+running 15 tests
+test a_predecessor_from_another_document_is_refused ... ok
+test a_key_rotation_changes_the_key_the_same_content_goes_under ... ok
+test predecessors_take_part_in_deriving_the_key ... ok
+test a_non_member_is_not_even_sent_the_document ... ok
+test a_reader_can_read_what_an_editor_wrote ... ok
+test a_member_added_after_a_write_cannot_derive_its_key ... ok
+test the_wrong_key_does_not_decrypt ... ok
+test a_predecessor_does_not_make_its_earlier_key_derivable ... ok
+test a_ciphertext_is_refused_if_tampered_with ... ok
+test a_member_added_before_a_write_can_derive_its_key ... ok
+test a_key_rotation_does_not_lock_out_a_current_member ... ok
+test two_things_cannot_share_a_name ... ok
+test content_written_after_a_rotation_does_not_open_what_came_before ... ok
+test writing_again_does_not_rotate_the_key_each_time ... ok
+test the_reader_derives_the_key_the_writer_used ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/deadlocks.rs (target/debug/deps/deadlocks-4770cecc6629ad39)
+
+running 1 test
+test a_revocation_issued_by_public_does_not_deadlock_the_receiver ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/delegations.rs (target/debug/deps/delegations-69e727c0b42f6db6)
+
+running 3 tests
+test a_delegation_reports_what_it_conveys ... ok
+test a_delegation_keeps_its_identity_as_the_graph_grows ... ok
+test delegations_differing_in_any_field_are_distinct ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/encrypt.rs (target/debug/deps/encrypt-1e1ad6515f7b7ca7)
+
+running 1 test
+test test_dual_instance_log_based_sync ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/g5_min.rs (target/debug/deps/g5_min-4448e7b119890d2d)
+
+running 1 test
+test topsort_keeps_a_contact_cards_lone_rotate ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/g5_own_export.rs (target/debug/deps/g5_own_export-5dc30402c1820e30)
+
+running 9 tests
+test q0_topsort_keeps_a_lone_key_add ... ok
+test q0_topsort_keeps_a_lone_key_rotate ... ok
+test q1_own_export_carries_the_members_key_event_intro_by_add ... ok
+test q1_own_export_carries_the_members_key_event_intro_by_card ... ok
+test q2_rebuilt_from_own_export_reads_intro_by_add_own_key_events_dropped ... ok
+test q2_rebuilt_from_own_export_reads_intro_by_card_own_key_events_dropped ... ok
+test q2_rebuilt_from_own_export_reads_intro_by_add ... ok
+test q2_rebuilt_from_own_export_reads_intro_by_card ... ok
+test q3_relay_forwarded_sync_gives_the_member_access ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/instances.rs (target/debug/deps/instances-5d278d8387bf0e29)
+
+running 19 tests
+test a_second_instance_takes_its_name_too ... ok
+test a_keyhive_built_outside_the_context_can_join_the_cast ... ok
+test a_rotation_keeps_its_leaf_key_out_of_the_published_prekeys ... ok
+test a_peer_cannot_read_an_instance_it_has_not_heard_from ... ok
+test a_relay_carries_the_second_instances_write_to_a_public_reader ... ok
+test a_public_reader_reads_what_the_second_instance_wrote ... ok
+test a_revocation_and_a_redelegation_reach_the_other_instance ... ok
+test prekey_secrets_do_not_cross_between_identities ... ok
+test an_instance_adopts_a_leaf_secret_carried_by_an_archive ... ok
+test an_instance_reads_what_its_replica_forced_a_pcs_update_for ... ok
+test an_instance_adopts_a_leaf_secret_that_arrives_after_the_rotation ... ok
+test a_sibling_needs_the_prekey_secrets_to_open_an_invitation ... ok
+test two_instances_of_one_identity_are_one_member ... ok
+test an_instance_reads_what_its_replica_wrote_after_a_rotation ... ok
+test either_instance_signs_as_the_identity ... ok
+test the_second_instance_writes_and_a_member_reads_it ... ok
+test the_second_instance_writes_to_a_document_owned_through_a_group ... ok
+test concurrent_rotations_at_a_shared_leaf_converge ... ok
+test two_instances_creating_documents_independently_converge ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+
+     Running tests/membership.rs (target/debug/deps/membership-95bc5a435afbf1a1)
+
+running 25 tests
+test a_cascading_revocation_removes_the_members_they_admitted ... ignored, a cascading revocation keeps members admitted by the one it removes
+test a_member_who_was_revoked_and_admitted_again_is_not_listed ... ok
+test a_revoked_member_is_listed_at_the_best_level_they_held ... ok
+test a_document_has_no_key_for_itself ... ok
+test a_revoked_member_is_listed_with_what_they_lost ... ok
+test a_revoked_member_of_a_document_is_listed_too ... ok
+test a_cascading_revocation_removes_the_member_it_names ... ok
+test adding_a_member_to_a_group_reaches_the_documents_it_holds ... ok
+test breaking_a_cycle_from_both_sides_terminates ... ok
+test a_cycle_does_not_stop_an_addition_reaching_the_document ... ok
+test a_direct_membership_survives_a_revocation_further_up ... ok
+test a_change_in_a_group_that_holds_a_document_leaves_the_document_alone ... ok
+test a_member_with_a_second_route_survives_a_revocation ... ok
+test revoking_a_group_from_one_document_leaves_the_other ... ok
+test revoking_a_link_in_a_cycle_removes_access ... ok
+test revoking_a_link_removes_everyone_below_it ... ok
+test adding_a_member_deep_in_a_chain_reaches_the_document ... ok
+test revoking_a_subgroup_takes_its_members_out_of_the_key_group ... ok
+test revoking_a_link_in_a_longer_cycle_removes_access ... ok
+test adding_a_member_to_a_group_reaches_every_document_it_holds ... ok
+test revoking_one_route_leaves_the_other_document_alone ... ok
+test revoking_one_of_two_cyclic_groups_keeps_the_other_route ... ok
+test revoking_a_member_keeps_the_members_they_admitted ... ok
+test revoking_a_group_from_a_document_removes_only_its_members ... ok
+test revoking_a_subgroup_removes_only_the_members_it_brought ... ok
+
+test result: ok. 24 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.71s
+
+     Running tests/path_validation.rs (target/debug/deps/path_validation-7d6a9c4805594a00)
+
+running 1 test
+test an_update_whose_path_is_not_its_direct_path_is_ignored ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/prekeys.rs (target/debug/deps/prekeys-72523aef346d00f9)
+
+running 6 tests
+test expanding_prekeys_adds_a_distinct_key ... ok
+test rotating_a_prekey_replaces_the_old_one ... ok
+test rotating_a_prekey_records_what_it_replaced ... ok
+test a_rotated_away_intermediate_prekey_does_not_survive ... ok
+test two_concurrent_rotations_of_one_key_both_survive ... ok
+test a_prekey_rotation_reaches_a_peer ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/public.rs (target/debug/deps/public-f33b4f3de0028389)
+
+running 9 tests
+test delegating_to_public_creates_a_public_delegation ... ok
+test a_public_delegation_raises_best_access_for_doc_and_not_access_for_doc ... ok
+test a_direct_delegation_and_a_public_delegation_take_the_higher ... ok
+test the_public_leaf_keeps_its_well_known_key ... ok
+test a_public_reader_reads_what_a_member_wrote ... ok
+test a_public_editor_writes_by_rotating_the_public_leaf ... ok
+test another_member_does_not_displace_the_public_reader ... ok
+test two_public_readers_meet_through_the_document ... ok
+test a_public_document_is_reachable_as_public_and_not_as_yourself ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/revocation_sync.rs (target/debug/deps/revocation_sync-04640be8d0a03d3c)
+
+running 3 tests
+test a_group_in_no_document_still_provides_keys_from_its_revoked_members ... ok
+test the_bulk_traversal_reaches_a_revocation_nested_inside_a_revoked_group ... ok
+test the_bulk_traversal_offers_a_revoked_members_keys_to_those_who_need_them ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/sync.rs (target/debug/deps/sync-29fbdc31b56c076b)
+
+running 12 tests
+test a_member_without_the_key_tree_derives_no_pcs_key ... ok
+test partial_delivery_leaves_events_pending_and_they_apply_later ... ok
+test stats_counts_key_agreement_only_once_the_operations_arrive ... ok
+test withholding_key_agreement_leaves_a_member_who_cannot_read ... ok
+test all_agent_events_agrees_with_the_per_agent_walk ... ok
+test redelivering_known_events_changes_nothing ... ok
+test a_backlog_that_cannot_apply_does_not_block_new_events ... ok
+test a_revocation_inside_a_group_reaches_a_peer_of_the_parent ... ok
+test the_resending_sync_methods_really_resend ... ok
+test revoking_a_member_whose_add_is_still_outstanding_removes_them_from_the_tree ... ok
+test a_replica_sent_a_concurrent_removal_still_applies_later_ones ... ok
+test delivery_order_does_not_change_the_authority_graph ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s
+
+     Running tests/transitive_access.rs (target/debug/deps/transitive_access-8de688880d109ce6)
+
+running 8 tests
+test test_transitive_admin_can_revoke_via_group ... ok
+test test_group_delegate_before_defining_event_reified_as_group ... ok
+test test_transitive_admin_can_revoke ... ok
+test test_document_delegate_before_defining_event_reified_as_document ... ok
+test test_deep_chain_revocation ... ok
+test test_transitive_admin_can_make_public_via_sync ... ok
+test test_concurrent_cgka_adds_merge_correctly ... ok
+test a_peer_that_started_its_own_tree_converges_when_the_creators_ops_arrive ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running tests/unintroduced_replica.rs (target/debug/deps/unintroduced_replica-1b75e2a9e748cb92)
+
+running 4 tests
+test a_replica_that_never_met_a_revoked_groups_members_takes_the_revocation_in ... ok
+test a_replica_that_never_met_the_revoked_member_takes_the_revocation_in ... ok
+test a_replica_takes_in_a_delegate_dropped_without_a_revocation ... ok
+test a_replica_takes_in_a_delegate_dropped_inside_a_member_group ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+   Doc-tests keyhive_core
+
+running 6 tests
+test keyhive_core/src/test_utils.rs - test_utils (line 21) ... ok
+test keyhive_core/src/util/content_addressed_map.rs - util::content_addressed_map::CaMap<T>::new (line 23) ... ok
+test keyhive_core/src/util/content_addressed_map.rs - util::content_addressed_map::CaMap<T>::from_iter (line 134) ... ok
+test keyhive_core/src/transact.rs - transact::transact_blocking (line 16) ... ok
+test keyhive_core/src/transact.rs - transact::transact_async (line 55) ... ok
+test keyhive_core/src/debug_events/terminal.rs - debug_events::terminal::print_event_table (line 15) ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.26s
+

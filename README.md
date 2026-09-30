@@ -10,7 +10,7 @@ This is the native-device sibling of [local-first-social-network](https://github
 
 ## On this branch now
 
-**Experiment F-1 is done and parked: encrypted content on a document rebuilt from storage.** It asked whether the app can keep reading and writing encrypted Keyhive documents after a restart, without storing key secrets unprotected. It can, under two conditions, in the Rust core and in the app on an Android emulator and an iPhone.
+**Experiment F-1 is done and promoted: encrypted content on a document rebuilt from storage.** It asked whether the app can keep reading and writing encrypted Keyhive documents after a restart, without storing key secrets unprotected. It can, under two conditions, in the Rust core and in the app on an Android emulator and an iPhone.
 
 - **Keyhive moved to `35460ba1`,** Keyhive's `main` as of 2026-09-29 and 16 commits past the `90fe4a51` pin that `main` uses. Rows stored at `90fe4a51` load unchanged: both stored formats decode and re-encode byte for byte, and the identity reloads with the same members. The dependency notes further down still describe `main`.
 - **It works, given two conditions.** A device rebuilt from storage reads content written before and after restarts, and a member it shared with reads both. That needs:
@@ -18,9 +18,9 @@ This is the native-device sibling of [local-first-social-network](https://github
   2. the key events of every member the device added, stored beside Keyhive's own export for the device, because that export leaves them out. This is gap G-5.
 - **The secrets have to be saved again after a document's first encryption and after any key update.** Ordinary writes don't change them. Secrets saved before a key update can't read content written after it.
 - **In the app, the secrets live in each platform's protected storage,** in debug builds only: under an Android Keystore key on the emulator (software-backed there) and as Keychain items on an iPhone. No seed or secret reaches the database.
-- **Why it's parked:** it depends on the G-5 workaround. G-5's cause is now found in Keyhive. Its export leaves out a member's key event when the device knows that member only from a contact card. A test against Keyhive alone shows it ([`docs/frontier/patches/G-5-repro.patch`](docs/frontier/patches/G-5-repro.patch)). It's reported on [Keyhive issue #206](https://github.com/inkandswitch/keyhive/issues/206#issuecomment-5902241890). Next is a maintainer's reply there, and deciding whether to promote F-1.
+- **Why it's promoted:** it was parked because it depends on the G-5 workaround, until G-5's cause was known. It is now. Keyhive's export leaves out a member's key event when the device knows that member only from a contact card. A test against Keyhive alone shows it ([`docs/frontier/patches/G-5-repro.patch`](docs/frontier/patches/G-5-repro.patch)), and experiment F-2 showed a 10-line change to Keyhive fixes it without breaking Keyhive's own tests ([`docs/frontier/patches/G-5-topsort-fix.patch`](docs/frontier/patches/G-5-topsort-fix.patch)). Both are on [Keyhive issue #206](https://github.com/inkandswitch/keyhive/issues/206#issuecomment-5902559650). The workaround stays until Keyhive changes; if it does, the events the app stores become redundant rather than wrong. Next is a fresh build of F-1 on `main`.
 
-Details are in [`docs/frontier/gap-register.md`](docs/frontier/gap-register.md) (G-3, G-4, G-5), the F-1 entry in [`docs/frontier/frontier-log.md`](docs/frontier/frontier-log.md), and the test output in [`docs/frontier/evidence/F-1/`](docs/frontier/evidence/F-1/) and [`docs/frontier/evidence/G-5/`](docs/frontier/evidence/G-5/).
+Details are in [`docs/frontier/gap-register.md`](docs/frontier/gap-register.md) (G-3, G-4, G-5), the F-1 and F-2 entries in [`docs/frontier/frontier-log.md`](docs/frontier/frontier-log.md), and the test output in [`docs/frontier/evidence/F-1/`](docs/frontier/evidence/F-1/) and [`docs/frontier/evidence/G-5/`](docs/frontier/evidence/G-5/).
 
 ## What runs today
 
