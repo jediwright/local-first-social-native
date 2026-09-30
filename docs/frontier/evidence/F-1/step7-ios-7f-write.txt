@@ -1,0 +1,16 @@
+# F-1 step 7f-write, iPhone 17 Pro (physical)
+# launch 1: relaunch, then Write: commit, don't save
+F1 F-1 launch: restore ImportFirst · doc DocumentId(0xe03d6b569dfa6403… · key update - · pending 0 · cgka 5 · secret pairs 23
+F1   read content 1 (setup): OK (F-1 content 1 (setup))
+F1   read content 2: OK (F-1 content 2)
+F1   read content 3: OK (F-1 content 3)
+F1 keychain class WhenUnlockedThisDeviceOnly · Secure Enclave present · passcode set · device
+F1 write · doc DocumentId(0xe03d6b569dfa6403… · key update false · pending 0 · cgka 5 · secret pairs 23
+F1 secrets NOT re-saved (staged failure); rows committed
+# launch 2: kill and relaunch, ImportFirst
+F1 F-1 launch: restore ImportFirst · doc DocumentId(0xe03d6b569dfa6403… · key update - · pending 0 · cgka 5 · secret pairs 23
+F1   read content 1 (setup): OK (F-1 content 1 (setup))
+F1   read content 2: OK (F-1 content 2)
+F1   read content 3: OK (F-1 content 3)
+F1   read content 4: OK (F-1 content 4)
+F1 keychain class WhenUnlockedThisDeviceOnly · Secure Enclave present · passcode set · device

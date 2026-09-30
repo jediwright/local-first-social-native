@@ -50,7 +50,8 @@ final class Shell: ObservableObject, @unchecked Sendable {
     @Published var recoverySeedHex = ""
     @Published var recoveryStatus = ""
     static let demoGroup = "demo"
-    private var core: Core?
+    // F-1 step 7: readable by F1Section (Debug only); still set only here.
+    private(set) var core: Core?
     private var handle: UInt64 = 0
     private var profileHandle: UInt64 = 0
     private var pingsHandle: UInt64 = 0
@@ -92,6 +93,8 @@ final class Shell: ObservableObject, @unchecked Sendable {
                     self.docsStatus = Shell.docsSummary(p, g, t)
                     self.reload()
                     self.reloadIdentityIfCustodied()
+                    // Frontier F-1 step 7: restore the F-1 document, secrets first (no-op in Release).
+                    F1Debug.shared.onLaunch(core)
                 }
             } catch let e as CoreError {
                 // A-O22 check: typed catch compiles and binds — one class per error.
@@ -561,6 +564,9 @@ struct ContentView: View {
                 }
                 .buttonStyle(.bordered)
                 Text(shell.recoveryStatus).font(.footnote)
+
+                // Frontier F-1 step 7 (Debug only; EmptyView in Release)
+                F1Section(core: { shell.core })
 
                 Text(shell.pins).font(.caption2).foregroundStyle(.secondary)
             }

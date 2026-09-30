@@ -1,0 +1,20 @@
+# F-1 step 7c, iPhone 17 Pro (physical)
+# launch 1: relaunch (ImportFirst), then Restore IMPORT_AFTER, then Restore NO_SECRETS
+F1 F-1 launch: restore ImportFirst · doc DocumentId(0xe03d6b569dfa6403… · key update - · pending 0 · cgka 5 · secret pairs 16
+F1   read content 1 (setup): OK (F-1 content 1 (setup))
+F1   read content 2: OK (F-1 content 2)
+F1   read content 3: OK (F-1 content 3)
+F1 keychain class WhenUnlockedThisDeviceOnly · Secure Enclave present · passcode set · device
+F1 restore ImportAfter · doc DocumentId(0xe03d6b569dfa6403… · key update - · pending 0 · cgka 5 · secret pairs 16
+F1   read content 1 (setup): OK (F-1 content 1 (setup))
+F1   read content 2: OK (F-1 content 2)
+F1   read content 3: OK (F-1 content 3)
+F1 restore NoSecrets · doc DocumentId(0xe03d6b569dfa6403… · key update - · pending 5 · cgka - · secret pairs 7
+F1   pending CgkaOperation (own): ReceiveCgkaOpError(UnknownInvitePrekey(0xae701d94e3a0ab12…))
+F1   pending CgkaOperation (own): ReceiveCgkaOpError(CgkaError(UnexpectedInitialOperation))
+F1   pending CgkaOperation (own): ReceiveCgkaOpError(CgkaError(UnexpectedInitialOperation))
+F1   pending CgkaOperation (own): ReceiveCgkaOpError(CgkaError(UnexpectedInitialOperation))
+F1   pending CgkaOperation (own): ReceiveCgkaOpError(CgkaError(OutOfOrderOperation))
+F1   read content 1 (setup): FAILED (KeyNotFound)
+F1   read content 2: FAILED (KeyNotFound)
+F1   read content 3: FAILED (KeyNotFound)

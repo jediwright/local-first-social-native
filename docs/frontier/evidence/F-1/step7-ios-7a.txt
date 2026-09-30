@@ -1,0 +1,9 @@
+# F-1 step 7a, iPhone 17 Pro (physical)
+# launch 1: fresh, then Set up
+F1 F-1 launch: no stored document (tap Set up)
+F1 setup · doc DocumentId(0xd19039d2c1af3eb3… · key update true · pending 0 · cgka 4 · secret pairs 8
+F1 secrets saved (keychain class WhenUnlockedThisDeviceOnly · Secure Enclave present · passcode set · device); rows committed
+# launch 2: relaunch, ImportFirst
+F1 F-1 launch: restore ImportFirst · doc DocumentId(0xd19039d2c1af3eb3… · key update - · pending 0 · cgka 4 · secret pairs 15
+F1   read content 1 (setup): OK (F-1 content 1 (setup))
+F1 keychain class WhenUnlockedThisDeviceOnly · Secure Enclave present · passcode set · device
