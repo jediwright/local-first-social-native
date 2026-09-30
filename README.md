@@ -6,13 +6,14 @@ This is the native-device sibling of [local-first-social-network](https://github
 
 ## Experimental work on the `frontier` branch
 
-Ahead of the tested app here, the [`frontier`](https://github.com/jediwright/local-first-social-native/tree/frontier) branch tries things out quickly and records what it finds in the Keyhive stack. Nothing from it is merged into `main`; anything that proves out is rebuilt here through the normal process. Its first experiment, **F-1**, asks whether the app can keep reading and writing encrypted Keyhive documents after a restart, without storing key secrets unprotected. Early results, from tests in the Rust core only:
+Ahead of the tested app here, the [`frontier`](https://github.com/jediwright/local-first-social-native/tree/frontier) branch tries things out quickly and records what it finds in the Keyhive stack. Nothing from it is merged into `main`; anything that proves out is rebuilt here through the normal process. Its first experiment, **F-1**, asked whether the app can keep reading and writing encrypted Keyhive documents after a restart, without storing key secrets unprotected. It can, under two conditions, in the Rust core and in the app on an Android emulator and an iPhone. F-1 is done and parked:
 
 - **Stored data survives a Keyhive upgrade.** Rows this app stores at the `90fe4a51` pin load unchanged at `35460ba`, Keyhive's `main` as of 2026-09-29 and 16 commits later.
-- **A restarted device can use encrypted documents again, given two conditions.** Its secrets have to be restored before its stored history is replayed, and the key events of every member it added have to be stored as well, because Keyhive's own export for the device leaves them out. The cause of that gap isn't known yet.
-- **The secrets have to be saved again after every change that rotates a key,** including an ordinary encryption. No seed or secret reaches the database.
+- **A restarted device can use encrypted documents again, given two conditions.** Its current secrets have to be restored, and the key events of every member it added have to be stored as well, because Keyhive's own export for the device leaves them out.
+- **The secrets have to be saved again after a document's first encryption and after any key update.** Ordinary writes don't change them. No seed or secret reaches the database.
+- **The gap now has a cause.** Keyhive's export leaves out a member's key event when the device knows that member only from a contact card. A test against Keyhive alone shows it, and it's reported on [Keyhive issue #206](https://github.com/inkandswitch/keyhive/issues/206#issuecomment-5902241890).
 
-Device runs (Android emulator, then iPhone) come next. Summary: [frontier README](https://github.com/jediwright/local-first-social-native/tree/frontier#on-this-branch-now) · gaps found: [`gap-register.md`](https://github.com/jediwright/local-first-social-native/blob/frontier/docs/frontier/gap-register.md) · how the branch works: [`CHARTER.md`](https://github.com/jediwright/local-first-social-native/blob/frontier/docs/frontier/CHARTER.md).
+Summary: [frontier README](https://github.com/jediwright/local-first-social-native/tree/frontier#on-this-branch-now) · gaps found: [`gap-register.md`](https://github.com/jediwright/local-first-social-native/blob/frontier/docs/frontier/gap-register.md) · how the branch works: [`CHARTER.md`](https://github.com/jediwright/local-first-social-native/blob/frontier/docs/frontier/CHARTER.md).
 
 ## What runs today
 
