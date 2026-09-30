@@ -74,9 +74,9 @@ Each gap records:
 
 **Possible fix:** Store group-encryption operations as a new row type under a new format tag. Level 0, in the app. It would change the persistence-absence test (charter rule 3) and has consequences for sync.
 
-**Next step:** Keep local. F-1 is testing the fix on `frontier`. Whether the app adopts it depends on Phase 2 deciding whether it needs content encryption on reloaded documents.
+**Next step:** Keep local. F-1 showed the fix works on `frontier` under stated conditions and is parked until G-5's cause is settled. Whether the app adopts it also depends on Phase 2 deciding whether it needs content encryption on reloaded documents.
 
-**Experiments:** F-1. At `35460ba`, a row holding a document's public events, group-encryption operations included (`keyhive.doc-events.bincode.v1`), rebuilds the document's encryption state on reload. It works only if the device's secrets are imported before replay and the prekey events of members the device added are stored too (see G-5). Across two restarts the device and a peer read old and new content, with no seed or secret on disk. The secrets have to be saved again after every change that rotates a key, including an ordinary encryption.
+**Experiments:** F-1. At `35460ba`, a row holding a document's public events, group-encryption operations included (`keyhive.doc-events.bincode.v1`), rebuilds the document's encryption state on reload, given two conditions: the prekey events of members the device added are stored too (see G-5), and the device's current secrets are imported. Once the members' events are stored, the order of import and replay doesn't matter. Only a document's first encryption and an explicit key update change the secrets, so they have to be saved again after those; secrets saved earlier still read everything encrypted before the key update. Across restarts the device and a peer read old and new content, in the core and on an Android emulator and an iPhone (F-1 step 7), with no seed or secret on disk.
 
 ---
 
@@ -112,6 +112,6 @@ Each gap records:
 
 **Possible fix:** First find why the member's prekey event is left out. Level 0 while the cause is unknown; level 1 or upstream if it turns out to be in Keyhive.
 
-**Next step:** Keep local until the cause is narrowed down, then ask in `#keyhive` or open an issue.
+**Next step:** Write a reproduction against Keyhive alone, in the style of the test in Keyhive pull request #85. If it reproduces, add it to Keyhive issue #206 (open since 2026-06-22), which reports the same kind of failure: events exported for an agent leave out the other agents in its groups. Open a separate issue only if the cause turns out to differ, then point `#keyhive` to whichever it is. If it doesn't reproduce, the cause is in the app.
 
-**Experiments:** F-1.
+**Experiments:** F-1 (core runs 3 and 4; step 7d reproduces it on an Android emulator and an iPhone).
