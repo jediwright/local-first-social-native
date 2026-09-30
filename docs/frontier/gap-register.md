@@ -116,6 +116,6 @@ Each gap records:
 
 **Possible fix:** In Keyhive, `KeyOp::topsort` could also start from rotations whose earlier key isn't in the set. Level 1 to try locally; upstream only by a deliberate decision. The app keeps its workaround (level 0) until Keyhive changes.
 
-**Next step:** Comment on Keyhive issue #206 with the reproduction and the version, then point `#keyhive` to it. #206's sender also learns the member from a contact card, so the cause is likely the same.
+**Next step:** Commented on Keyhive issue #206 on 2026-09-29 with the reproduction and the version ([comment](https://github.com/inkandswitch/keyhive/issues/206#issuecomment-5902241890)); #206's sender also learns the member from a contact card, so the cause is likely the same. Wait for a maintainer's reply there. Confirming the cause with a local change to `KeyOp::topsort` (level 1, scratch clone only) is optional.
 
 **Experiments:** F-1 (core runs 3 and 4; step 7d reproduces it on an Android emulator and an iPhone).
