@@ -1,0 +1,355 @@
+G-5 reproduction against Keyhive alone.
+
+Gap:        G-5 (docs/frontier/gap-register.md)
+Keyhive:    inkandswitch/keyhive @ 35460ba125f2358c7ef39deb5f6bbe2b61230582 (main on 2026-09-29)
+Changes:    adds one test file, keyhive_core/tests/g5_own_export.rs; no Keyhive code changed
+Apply:      git apply G-5-repro.patch   (from the Keyhive checkout's root)
+Run:        cargo test -p keyhive_core --test g5_own_export -- --nocapture --test-threads=1
+Output:     docs/frontier/evidence/G-5/run2.txt
+Identities: generated at runtime; identifiers in the output are cut to 8 hex digits
+License:    Keyhive is Apache-2.0 at this rev
+
+diff --git a/keyhive_core/tests/g5_own_export.rs b/keyhive_core/tests/g5_own_export.rs
+new file mode 100644
+index 0000000..17f1001
+--- /dev/null
++++ b/keyhive_core/tests/g5_own_export.rs
+@@ -0,0 +1,338 @@
++//! A device's own event export, and a second instance rebuilt from it.
++//!
++//! A device makes a document, adds one member, and encrypts content.
++//!
++//! - Q0: does `KeyOp::topsort` keep a member's only key event when it is a rotate?
++//! - Q1: does `static_events_for_agent(device)` carry the member's key event?
++//! - Q2: does a second instance with the same signer and the device's prekey
++//!   secrets, given only that export, apply every event and decrypt?
++//! - Q3: the relay shape from issue #206 (A -> relay -> B).
++//!
++//! Members are introduced two ways: by a key add (as the other tests in this
++//! directory do) and by `receive_contact_card`, whose card carries a key rotate.
++//! Reports name roles (device, member, relay); any identifier inside an error is
++//! cut to its first 8 hex digits. Every identity is generated at runtime.
++//!
++//! Run: cargo test -p keyhive_core --test g5_own_export -- --nocapture --test-threads=1
++
++use futures::lock::Mutex;
++use keyhive_core::{
++    access::Access,
++    event::static_event::StaticEvent,
++    keyhive::Keyhive,
++    listener::no_listener::NoListener,
++    principal::{
++        identifier::Identifier,
++        individual::{id::IndividualId, op::KeyOp, Individual},
++    },
++    store::ciphertext::memory::MemoryCiphertextStore,
++    test_utils::{make_simple_keyhive, Hive},
++};
++use keyhive_crypto::signer::memory::MemorySigner;
++use nonempty::nonempty;
++use rand::rngs::OsRng;
++use std::{collections::BTreeMap, sync::Arc};
++use testresult::TestResult;
++
++const HEAD: [u8; 32] = [1u8; 32];
++const PLAINTEXT: &[u8] = b"own-export test content";
++
++#[derive(Clone, Copy, Debug)]
++enum Intro {
++    /// `expand_prekeys` + `register_individual`: a key add.
++    Add,
++    /// `generate_contact_card` + `receive_contact_card`: a key rotate.
++    Card,
++}
++
++async fn hive_with(signer: MemorySigner) -> TestResult<Hive> {
++    let kh: Hive = Keyhive::generate(signer, MemoryCiphertextStore::new(), NoListener, OsRng).await?;
++    Ok(kh)
++}
++
++/// Make `who` known to `observer`, so `observer` can add `who` to a document.
++async fn introduce(observer: &Hive, who: &Hive, how: Intro) -> TestResult<IndividualId> {
++    match how {
++        Intro::Add => {
++            let prekey = who.expand_prekeys().await?;
++            let indie = Arc::new(Mutex::new(Individual::new(KeyOp::Add(prekey))));
++            let id = { indie.lock().await.id() };
++            observer.register_individual(indie).await;
++            Ok(id)
++        }
++        Intro::Card => {
++            let card = who.generate_contact_card().await?;
++            Ok(observer.receive_contact_card(&card).await?)
++        }
++    }
++}
++
++/// Is `ev` a key event (add or rotate) issued by `who`?
++fn is_key_event_of(ev: &StaticEvent<[u8; 32]>, who: Identifier) -> bool {
++    match ev {
++        StaticEvent::PrekeysExpanded(op) => Identifier::from(op.issuer()) == who,
++        StaticEvent::PrekeyRotated(op) => Identifier::from(op.issuer()) == who,
++        _ => false,
++    }
++}
++
++/// Event kind, with the issuer named by role.
++fn kind(ev: &StaticEvent<[u8; 32]>, roles: &[(Identifier, &str)]) -> String {
++    let role = |i: Identifier| {
++        roles
++            .iter()
++            .find(|(id, _)| *id == i)
++            .map(|(_, r)| *r)
++            .unwrap_or("other")
++    };
++    match ev {
++        StaticEvent::PrekeysExpanded(op) => format!("PrekeysExpanded[{}]", role(Identifier::from(op.issuer()))),
++        StaticEvent::PrekeyRotated(op) => format!("PrekeyRotated[{}]", role(Identifier::from(op.issuer()))),
++        StaticEvent::CgkaOperation(op) => format!("CgkaOperation[{}]", role(Identifier::from(op.issuer()))),
++        StaticEvent::Delegated(_) => "Delegated".to_string(),
++        StaticEvent::Revoked(_) => "Revoked".to_string(),
++    }
++}
++
++fn tally<'a>(events: impl IntoIterator<Item = &'a StaticEvent<[u8; 32]>>, roles: &[(Identifier, &str)]) -> String {
++    let mut counts: BTreeMap<String, usize> = BTreeMap::new();
++    for ev in events {
++        *counts.entry(kind(ev, roles)).or_default() += 1;
++    }
++    counts
++        .iter()
++        .map(|(k, n)| format!("{k} x{n}"))
++        .collect::<Vec<_>>()
++        .join(", ")
++}
++
++/// Cut every `0x` hex run longer than 8 digits to its first 8, so no full
++/// identifier reaches the output.
++fn redact(s: &str) -> String {
++    let b = s.as_bytes();
++    let mut out = String::with_capacity(s.len());
++    let mut i = 0;
++    while i < b.len() {
++        if b[i] == b'0' && i + 1 < b.len() && b[i + 1] == b'x' {
++            let start = i + 2;
++            let mut end = start;
++            while end < b.len() && b[end].is_ascii_hexdigit() {
++                end += 1;
++            }
++            out.push_str("0x");
++            if end - start > 8 {
++                out.push_str(&s[start..start + 8]);
++                out.push('…');
++            } else {
++                out.push_str(&s[start..end]);
++            }
++            i = end;
++        } else {
++            let ch = s[i..].chars().next().unwrap();
++            out.push(ch);
++            i += ch.len_utf8();
++        }
++    }
++    out
++}
++
++// ---------------------------------------------------------------- Q0
++
++/// How many of an individual's key events survive `KeyOp::topsort`, the sort
++/// `reachable_prekey_ops_for_agent` applies before export.
++async fn q0(how: Intro) -> TestResult<(usize, usize)> {
++    let who = make_simple_keyhive().await?;
++    let indie = match how {
++        Intro::Add => Individual::new(KeyOp::Add(who.expand_prekeys().await?)),
++        Intro::Card => Individual::from(&who.generate_contact_card().await?),
++    };
++    let held = indie.prekey_ops().len();
++    let sorted = KeyOp::topsort(indie.prekey_ops()).len();
++    println!("Q0 intro={how:?}: key events held {held}, after topsort {sorted}");
++    Ok((held, sorted))
++}
++
++#[tokio::test]
++async fn q0_topsort_keeps_a_lone_key_add() -> TestResult {
++    let (held, sorted) = q0(Intro::Add).await?;
++    assert_eq!(sorted, held, "topsort dropped a lone key add");
++    Ok(())
++}
++
++#[tokio::test]
++async fn q0_topsort_keeps_a_lone_key_rotate() -> TestResult {
++    let (held, sorted) = q0(Intro::Card).await?;
++    assert_eq!(sorted, held, "topsort dropped a lone key rotate (a contact card)");
++    Ok(())
++}
++
++// ---------------------------------------------------------------- Q1
++
++async fn q1(how: Intro) -> TestResult {
++    let device = make_simple_keyhive().await?;
++    let member = make_simple_keyhive().await?;
++    let member_id = introduce(&device, &member, how).await?;
++
++    let doc = device.generate_doc(vec![], nonempty![HEAD]).await?;
++    device.add_member(member_id, doc, Access::Edit, &[]).await?;
++    let _ = device.try_encrypt_content(doc, &HEAD, &vec![], PLAINTEXT).await?;
++
++    let device_ident = device.id().0;
++    let member_ident = member_id.0;
++    let roles = [(device_ident, "device"), (member_ident, "member")];
++
++    let export = device.static_events_for_agent(device.id()).await;
++    let carries = export.values().any(|e| is_key_event_of(e, member_ident));
++
++    println!("Q1 intro={how:?}");
++    println!("  device's own access: {:?}", device.access_for_doc(device.id(), doc).await);
++    println!("  export ({} events): {}", export.len(), tally(export.values(), &roles));
++    println!("  member key event in export: {carries}");
++
++    assert!(carries, "the device's own export has no key event from the member it added (intro={how:?})");
++    Ok(())
++}
++
++#[tokio::test]
++async fn q1_own_export_carries_the_members_key_event_intro_by_add() -> TestResult {
++    q1(Intro::Add).await
++}
++
++#[tokio::test]
++async fn q1_own_export_carries_the_members_key_event_intro_by_card() -> TestResult {
++    q1(Intro::Card).await
++}
++
++// ---------------------------------------------------------------- Q2
++
++async fn q2(how: Intro, drop_own_key_events: bool) -> TestResult {
++    let signer = MemorySigner::generate(&mut OsRng);
++    let device = hive_with(signer.clone()).await?;
++    let member = make_simple_keyhive().await?;
++    let member_id = introduce(&device, &member, how).await?;
++
++    let doc = device.generate_doc(vec![], nonempty![HEAD]).await?;
++    device.add_member(member_id, doc, Access::Edit, &[]).await?;
++    let encrypted = device
++        .try_encrypt_content(doc, &HEAD, &vec![], PLAINTEXT)
++        .await?
++        .encrypted_content()
++        .clone();
++
++    let device_ident = device.id().0;
++    let member_ident = member_id.0;
++    let roles = [(device_ident, "device"), (member_ident, "member")];
++
++    let secrets = device.export_prekey_secrets().await?;
++    let export = device.static_events_for_agent(device.id()).await;
++    let exported_member_key = export.values().any(|e| is_key_event_of(e, member_ident));
++    let replay: Vec<StaticEvent<[u8; 32]>> = export
++        .into_values()
++        .filter(|e| !drop_own_key_events || !is_key_event_of(e, device_ident))
++        .collect();
++
++    // Same signer, the device's secrets imported first, then only the export.
++    let rebuilt = hive_with(signer).await?;
++    rebuilt.import_prekey_secrets(&secrets).await?;
++    let pending = rebuilt.ingest_unsorted_static_events(replay.clone()).await;
++
++    let knows_member = rebuilt.get_individual(member_id).await.is_some();
++    let member_access = rebuilt.access_for_doc(member_id, doc).await;
++    let read = rebuilt.try_decrypt_content(doc, &encrypted).await;
++    let read_ok = matches!(&read, Ok(p) if p.as_slice() == PLAINTEXT);
++
++    println!("Q2 intro={how:?} drop_own_key_events={drop_own_key_events}");
++    println!("  member key event in export: {exported_member_key}");
++    println!("  replayed ({} events): {}", replay.len(), tally(replay.iter(), &roles));
++    println!("  pending: {}", pending.len());
++    // Bulk ingest keeps only the last error; retry each pending event alone to name it.
++    for ev in &pending {
++        let label = kind(ev, &roles);
++        match rebuilt.receive_static_event((**ev).clone()).await {
++            Ok(()) => println!("    {label}: applies when retried alone"),
++            Err(e) => println!("    {label}: {}", redact(&format!("{e:?}"))),
++        }
++    }
++    println!("  rebuilt knows the member: {knows_member}");
++    println!("  member's access on rebuilt: {member_access:?}");
++    println!("  read: {}", if read_ok { "ok".to_string() } else { redact(&format!("{:?}", read.err())) });
++
++    assert!(pending.is_empty(), "{} events pending on the rebuilt instance", pending.len());
++    assert!(knows_member, "the rebuilt instance doesn't know the member");
++    assert_eq!(member_access, Some(Access::Edit), "the rebuilt instance doesn't hold the member's access");
++    assert!(read_ok, "the rebuilt instance can't read what it wrote");
++    Ok(())
++}
++
++#[tokio::test]
++async fn q2_rebuilt_from_own_export_reads_intro_by_add() -> TestResult {
++    q2(Intro::Add, false).await
++}
++
++#[tokio::test]
++async fn q2_rebuilt_from_own_export_reads_intro_by_card() -> TestResult {
++    q2(Intro::Card, false).await
++}
++
++#[tokio::test]
++async fn q2_rebuilt_from_own_export_reads_intro_by_add_own_key_events_dropped() -> TestResult {
++    q2(Intro::Add, true).await
++}
++
++#[tokio::test]
++async fn q2_rebuilt_from_own_export_reads_intro_by_card_own_key_events_dropped() -> TestResult {
++    q2(Intro::Card, true).await
++}
++
++// ---------------------------------------------------------------- Q3
++
++#[tokio::test]
++async fn q3_relay_forwarded_sync_gives_the_member_access() -> TestResult {
++    let a = make_simple_keyhive().await?;
++    let relay = make_simple_keyhive().await?;
++    let b = make_simple_keyhive().await?;
++    let relay_id = introduce(&a, &relay, Intro::Card).await?;
++    let b_id = introduce(&a, &b, Intro::Card).await?;
++
++    let doc = a.generate_doc(vec![], nonempty![HEAD]).await?;
++    a.add_member(relay_id, doc, Access::Relay, &[]).await?;
++    a.add_member(b_id, doc, Access::Edit, &[]).await?;
++    let encrypted = a
++        .try_encrypt_content(doc, &HEAD, &vec![], PLAINTEXT)
++        .await?
++        .encrypted_content()
++        .clone();
++
++    let roles = [(a.id().0, "A"), (relay_id.0, "relay"), (b_id.0, "B")];
++
++    let to_relay = a.static_events_for_agent(relay_id).await;
++    let at_relay = relay
++        .ingest_unsorted_static_events(to_relay.values().cloned().collect())
++        .await;
++    let relay_knows_b = relay.get_individual(b_id).await.is_some();
++    let relay_sees_b = relay.access_for_doc(b_id, doc).await;
++
++    let to_b = relay.static_events_for_agent(b_id).await;
++    let at_b = b
++        .ingest_unsorted_static_events(to_b.values().cloned().collect())
++        .await;
++    let b_access = b.access_for_doc(b_id, doc).await;
++    let read = b.try_decrypt_content(doc, &encrypted).await;
++    let read_ok = matches!(&read, Ok(p) if p.as_slice() == PLAINTEXT);
++
++    println!("Q3 relay");
++    println!("  A -> relay ({} events): {}", to_relay.len(), tally(to_relay.values(), &roles));
++    println!("  pending at relay: {}", at_relay.len());
++    println!("  relay knows B: {relay_knows_b}; B's access as the relay sees it: {relay_sees_b:?}");
++    println!("  relay -> B ({} events): {}", to_b.len(), tally(to_b.values(), &roles));
++    println!("  pending at B: {}", at_b.len());
++    println!("  B's own access: {b_access:?}");
++    println!("  B read: {}", if read_ok { "ok".to_string() } else { redact(&format!("{:?}", read.err())) });
++
++    assert!(at_relay.is_empty(), "{} events pending at the relay", at_relay.len());
++    assert_eq!(relay_sees_b, Some(Access::Edit), "the relay doesn't see B's access");
++    assert!(at_b.is_empty(), "{} events pending at B", at_b.len());
++    assert_eq!(b_access, Some(Access::Edit), "B doesn't see its own access");
++    assert!(read_ok, "B can't read content encrypted before the relay hop");
++    Ok(())
++}

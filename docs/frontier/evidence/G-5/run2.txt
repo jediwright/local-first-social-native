@@ -1,0 +1,97 @@
+   Compiling keyhive_core v0.6.0 (/Users/jediwright/scratch/keyhive-g5/keyhive_core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.08s
+     Running tests/g5_own_export.rs (target/debug/deps/g5_own_export-5dc30402c1820e30)
+
+running 9 tests
+test q0_topsort_keeps_a_lone_key_add ... Q0 intro=Add: key events held 1, after topsort 1
+ok
+test q0_topsort_keeps_a_lone_key_rotate ... Q0 intro=Card: key events held 1, after topsort 0
+
+thread 'q0_topsort_keeps_a_lone_key_rotate' (261467) panicked at keyhive_core/tests/g5_own_export.rs:165:5:
+assertion `left == right` failed: topsort dropped a lone key rotate (a contact card)
+  left: 0
+ right: 1
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test q1_own_export_carries_the_members_key_event_intro_by_add ... Q1 intro=Add
+  device's own access: Some(Admin)
+  export (14 events): CgkaOperation[device] x4, Delegated x2, PrekeysExpanded[device] x7, PrekeysExpanded[member] x1
+  member key event in export: true
+ok
+test q1_own_export_carries_the_members_key_event_intro_by_card ... Q1 intro=Card
+  device's own access: Some(Admin)
+  export (13 events): CgkaOperation[device] x4, Delegated x2, PrekeysExpanded[device] x7
+  member key event in export: false
+
+thread 'q1_own_export_carries_the_members_key_event_intro_by_card' (261469) panicked at keyhive_core/tests/g5_own_export.rs:192:5:
+the device's own export has no key event from the member it added (intro=Card)
+FAILED
+test q2_rebuilt_from_own_export_reads_intro_by_add ... Q2 intro=Add drop_own_key_events=false
+  member key event in export: true
+  replayed (14 events): CgkaOperation[device] x4, Delegated x2, PrekeysExpanded[device] x7, PrekeysExpanded[member] x1
+  pending: 0
+  rebuilt knows the member: true
+  member's access on rebuilt: Some(Edit)
+  read: ok
+ok
+test q2_rebuilt_from_own_export_reads_intro_by_add_own_key_events_dropped ... Q2 intro=Add drop_own_key_events=true
+  member key event in export: true
+  replayed (7 events): CgkaOperation[device] x4, Delegated x2, PrekeysExpanded[member] x1
+  pending: 0
+  rebuilt knows the member: true
+  member's access on rebuilt: Some(Edit)
+  read: ok
+ok
+test q2_rebuilt_from_own_export_reads_intro_by_card ... Q2 intro=Card drop_own_key_events=false
+  member key event in export: false
+  replayed (13 events): CgkaOperation[device] x4, Delegated x2, PrekeysExpanded[device] x7
+  pending: 3
+    CgkaOperation[device]: ReceiveCgkaOpError(PendingCgkaAuthorization(DocumentId(0x5a05720f…)))
+    CgkaOperation[device]: ReceiveCgkaOpError(CgkaError(OutOfOrderOperation))
+    Delegated: ReceiveStaticMembershipError(UnknownAgent(Identifier(0x77de0a56…)))
+  rebuilt knows the member: false
+  member's access on rebuilt: None
+  read: Some(KeyNotFound)
+
+thread 'q2_rebuilt_from_own_export_reads_intro_by_card' (261472) panicked at keyhive_core/tests/g5_own_export.rs:260:5:
+3 events pending on the rebuilt instance
+FAILED
+test q2_rebuilt_from_own_export_reads_intro_by_card_own_key_events_dropped ... Q2 intro=Card drop_own_key_events=true
+  member key event in export: false
+  replayed (6 events): CgkaOperation[device] x4, Delegated x2
+  pending: 3
+    Delegated: ReceiveStaticMembershipError(UnknownAgent(Identifier(0xe8e63de3…)))
+    CgkaOperation[device]: ReceiveCgkaOpError(CgkaError(OutOfOrderOperation))
+    CgkaOperation[device]: ReceiveCgkaOpError(PendingCgkaAuthorization(DocumentId(0x932ef9bd…)))
+  rebuilt knows the member: false
+  member's access on rebuilt: None
+  read: Some(KeyNotFound)
+
+thread 'q2_rebuilt_from_own_export_reads_intro_by_card_own_key_events_dropped' (261474) panicked at keyhive_core/tests/g5_own_export.rs:260:5:
+3 events pending on the rebuilt instance
+FAILED
+test q3_relay_forwarded_sync_gives_the_member_access ... Q3 relay
+  A -> relay (14 events): CgkaOperation[A] x4, Delegated x3, PrekeysExpanded[A] x7
+  pending at relay: 3
+  relay knows B: false; B's access as the relay sees it: None
+  relay -> B (9 events): PrekeyRotated[relay] x2, PrekeysExpanded[relay] x7
+  pending at B: 0
+  B's own access: None
+  B read: Some(NotFound(NotFound(Identifier(0x9099d600…))))
+
+thread 'q3_relay_forwarded_sync_gives_the_member_access' (261475) panicked at keyhive_core/tests/g5_own_export.rs:332:5:
+3 events pending at the relay
+FAILED
+
+failures:
+
+failures:
+    q0_topsort_keeps_a_lone_key_rotate
+    q1_own_export_carries_the_members_key_event_intro_by_card
+    q2_rebuilt_from_own_export_reads_intro_by_card
+    q2_rebuilt_from_own_export_reads_intro_by_card_own_key_events_dropped
+    q3_relay_forwarded_sync_gives_the_member_access
+
+test result: FAILED. 4 passed; 5 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+error: test failed, to rerun pass `-p keyhive_core --test g5_own_export`

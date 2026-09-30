@@ -98,20 +98,24 @@ Each gap records:
 
 ---
 
-## G-5 — A device's own event export leaves out the members it added
+## G-5 — A device's own event export leaves out members it knows only by contact card
 
-**Gap:** For a document the device made and shared, `static_events_for_agent` for the device returns the document's delegations, the device's own prekey events and the group-encryption operations, but not the prekey event of the member it added. A device rebuilt from that set alone refuses its own delegation of that member, and the encryption operations that depend on it stay pending, so no content can be read.
+**Gap:** Before exporting, Keyhive sorts each agent's prekey events with `KeyOp::topsort`, which starts only from prekey adds. A contact card carries a single prekey rotate, so a member the device knows only from its card has no add to start from, and its prekey event is silently left out of `static_events_for_agent`. A device rebuilt from its own export then refuses its delegation of that member, the encryption operations that depend on it stay pending, and no content can be read. Members introduced with a prekey add are exported and are unaffected.
 
 **Evidence (at `35460ba`):**
-- F-1 runs 3 and 4 (`evidence/F-1/`): every stored prekey event was the device's own. The device's delegation of the peer was refused with `UnknownAgent` naming the peer, and the peer's add waited with `PendingCgkaAuthorization`.
-- `keyhive_core/src/keyhive.rs` L1246: `reachable_prekey_ops_for_agent` reads as though it should include the prekey events of a document's members (L1310–1334). So the cause isn't known yet. It may be a bug, or a result of how the app uses the call.
+- A reproduction against Keyhive alone: [`patches/G-5-repro.patch`](patches/G-5-repro.patch) adds one test file and changes no Keyhive code. Its output is in `evidence/G-5/run2.txt`.
+  - `KeyOp::topsort` keeps a lone prekey add (1 in, 1 out) and drops a lone prekey rotate (1 in, 0 out).
+  - With the member introduced by contact card, the device's export has no prekey event from the member. An instance rebuilt from that export, with the same signer and the device's secrets imported, fails with `UnknownAgent`, `PendingCgkaAuthorization` and `OutOfOrderOperation`, and reads fail with `KeyNotFound`. With the member introduced by a prekey add, the export carries the member's event and the rebuilt instance reads. Leaving the device's own prekey events out of the replay, as the app does, changes neither result.
+  - The relay case from Keyhive issue #206 fails at the same version: the relay can't apply three of the sender's events and never learns of the member.
+- `keyhive_core/src/principal/individual/op.rs` L37–68 (`KeyOp::topsort`), applied by `reachable_prekey_ops_for_agent` (`keyhive.rs` L1246, L1337–1339). `Keyhive::generate_contact_card` returns a rotate (`keyhive.rs` L345–354).
+- In the app: F-1 runs 3 and 4 and step 7d show the same failure.
 
-**Latest Keyhive:** Found on 2026-09-29 at `35460ba`, Keyhive's `main` as of that date.
+**Latest Keyhive:** Reproduced on 2026-09-29 at `35460ba`, Keyhive's `main` as of that date.
 
-**Workaround in the app:** Store the prekey event from each added member's contact card beside Keyhive's export, as the app already does for groups. With that, the document replays completely (F-1 run 5). The member's event is a `PrekeyRotated`, as contact cards produced at the old pin too.
+**Workaround in the app:** Store the prekey event from each added member's contact card beside Keyhive's export, as the app already does for groups. This supplies the one event the sort leaves out, and the document replays completely (F-1 run 5).
 
-**Possible fix:** First find why the member's prekey event is left out. Level 0 while the cause is unknown; level 1 or upstream if it turns out to be in Keyhive.
+**Possible fix:** In Keyhive, `KeyOp::topsort` could also start from rotations whose earlier key isn't in the set. Level 1 to try locally; upstream only by a deliberate decision. The app keeps its workaround (level 0) until Keyhive changes.
 
-**Next step:** Write a reproduction against Keyhive alone, in the style of the test in Keyhive pull request #85. If it reproduces, add it to Keyhive issue #206 (open since 2026-06-22), which reports the same kind of failure: events exported for an agent leave out the other agents in its groups. Open a separate issue only if the cause turns out to differ, then point `#keyhive` to whichever it is. If it doesn't reproduce, the cause is in the app.
+**Next step:** Comment on Keyhive issue #206 with the reproduction and the version, then point `#keyhive` to it. #206's sender also learns the member from a contact card, so the cause is likely the same.
 
 **Experiments:** F-1 (core runs 3 and 4; step 7d reproduces it on an Android emulator and an iPhone).
