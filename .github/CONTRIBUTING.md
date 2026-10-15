@@ -34,7 +34,7 @@ Most work on `main` lands as a numbered **build run**, committed directly by me,
 3. **Stop on a dependency change.** Any change to `core/Cargo.toml`, `core/crates/*/Cargo.toml` or `core/Cargo.lock` stops the build until it has been looked at and ruled on, with the lockfile diff listed in the log.
 4. **The Keyhive version is held fixed** within a run. Moving it is its own Critical change.
 5. **Generated bindings change by addition only.** Removing or changing an exported item is a Critical change.
-6. **One observation-log entry per run.** Every build that changes the core, the bindings or a shell gets an entry in [`docs/phase0-observation-log.md`](../docs/phase0-observation-log.md): toolchain, pins, outcome, defects. The log is append-only.
+6. **One observation-log entry per run.** Every build that changes the core, the bindings or a shell gets an entry in [`docs/phase0-observation-log.md`](../docs/phase0-observation-log.md): toolchain, pins, outcome, defects. The log is append-only. Times are UTC, as the log header sets, with the America/New_York time in parentheses.
 
 Commit messages follow the existing history: `Run N: <what changed>` for a build run, `Log: Run N` for its log entry, `Docs: …` for documentation and `Chore: …` for tooling. A pull request, when one is used, carries the same information in the template.
 
@@ -133,7 +133,7 @@ A change touching any of these is **automatically Critical**, whatever its size.
 
 Enforced by tooling:
 
-- **Secrets scan, CI:** `.github/workflows/guard.yml` runs `gitleaks` over the full history on every push to `main` and `frontier`. The config (`.gitleaks.toml`) adds a rule for bare 32-byte hex seeds, which the default rules miss.
+- **Secrets scan, CI:** `.github/workflows/guard.yml` runs `gitleaks` over the full history on every push to `main` and `frontier`. The config (`.gitleaks.toml`) adds a rule for bare 32-byte hex seeds, which the default rules miss. That rule flags any 64-character hex string, so evidence files shorten sha256 values and lockfile checksums to their first 16 hex characters. A full value pushed to `main` would fail the history scan on every later push.
 - **Dependency audit, CI:** the same workflow runs `cargo audit` (cargo-audit 0.22.2) in `core/` on every push to `main` and `frontier`. A vulnerability advisory fails the job. Warnings (unmaintained, unsound, yanked) are allowed and do not fail it, so each one is still looked at and recorded by hand.
 - **Runner image:** on `main`, both jobs run on `ubuntu-24.04` rather than `ubuntu-latest`, which GitHub moves to Ubuntu 26.04 between 2026-10-19 and 2026-11-19. Pinned 2026-10-15. Time-sensitive: review the pin when GitHub announces the deprecation of `ubuntu-24.04`, or on 2027-01-15, whichever comes first. The pin fixes the OS image, not the Rust version: the audit job builds `cargo-audit` with whatever Rust that image carries, which can still change.
 - **Secrets scan, local:** a `gitleaks` pre-commit hook on my machine scans each staged change. Hooks are not versioned; this one is expected on any machine that commits here.
@@ -143,6 +143,7 @@ Run by hand before a change lands, with the result recorded in the log entry or 
 - **Core tests:** `cargo make test` (`cargo test -p lfs_core`). All must pass; record the pass, fail and ignored counts.
 - **Dependency audit:** `cargo audit` in `core/` on any dependency change, before the change is committed. CI repeats it after the push; the hand run is the one the record cites. Every advisory is looked at and recorded.
 - **Device builds:** `cargo make android-so`, `bindgen-kotlin` and `swift-xcframework` (see [`BUILDING.md`](../BUILDING.md)), then the run's device checks on the Android emulator and an iPhone for any change that reaches a shell.
+- **Build folder:** `core/target` is shared by `main` and `frontier`, and cargo reuses a build across them when crate, features, target and flags all match. A missing `Compiling` line in a build log is therefore not evidence that a dependency was or was not built; when a run needs to show it, check the built artifact.
 
 Known gaps, each a candidate to move into CI: core tests do not run in CI on either branch. Until they do, they are run by hand and their results are written down. If you find another rule held by memory alone, adding it here is part of your change (see Self-healing conventions below).
 
@@ -173,4 +174,4 @@ For a live security issue that cannot wait: act first, then record it within **1
 
 ---
 
-*This file is a governed derivative of the Governed PR Framework v0.3 (J. Wright · UX Minds, LLC). Revised 2026-10-14 to match this repository; revised 2026-10-15 to record the dependency audit in CI on `main` and the runner-image pin.*
+*This file is a governed derivative of the Governed PR Framework v0.3 (J. Wright · UX Minds, LLC). Revised 2026-10-14 to match this repository; revised 2026-10-15 to record the dependency audit in CI on `main` and the runner-image pin, then evidence hash length, the shared build folder and observation-log times.*
