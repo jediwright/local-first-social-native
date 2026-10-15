@@ -1,0 +1,15 @@
+F-3 step 0: starting state, 2026-10-14 (America/New_York)
+
+frontier HEAD      3fc4f0e  (working tree clean before step 1)
+main HEAD          24c31a0  (unchanged)
+app Keyhive pin    35460ba1 on keyhive_core, keyhive_crypto, beekem; no local patch
+app nonempty       0.10 (direct dependency)
+
+Keyhive (github.com/inkandswitch/keyhive)
+  main             585e6fc  (refs/heads/main via git ls-remote)
+  target           2bb83d6  "Send every prekey op the agent needs without topsorting them (#260)",
+                            committed 2026-10-12
+  The pin goes to 2bb83d6, not main. main is past a change to the stored
+  group-encryption operation format; moving past 2bb83d6 is a separate experiment.
+
+Baseline suite at 35460ba1: step0-baseline-suite.txt

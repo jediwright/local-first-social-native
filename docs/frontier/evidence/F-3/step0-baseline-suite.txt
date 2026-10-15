@@ -1,0 +1,4 @@
+     Running unittests src/lib.rs (target/debug/deps/lfs_core-1f4dbb5b6c4d41c9)
+test result: ok. 50 passed; 0 failed; 12 ignored; 0 measured; 0 filtered out; finished in 0.20s
+   Doc-tests lfs_core
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
