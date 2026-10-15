@@ -22,16 +22,17 @@ samod       = { version = "0.14", features = ["tokio"] }
 # B1 - storage behind a trait
 rusqlite = { version = "0.40", features = ["bundled"] }
 # B3 - pin only; no Keyhive object is created in Phase 0 (L-4, L-12)
-keyhive_core = { git = "https://github.com/inkandswitch/keyhive", rev = "35460ba1" }
+keyhive_core = { git = "https://github.com/inkandswitch/keyhive", rev = "2bb83d6" }
 # Run 37 (identity ceremony) — companion crates keyhive_core does not re-export;
 # zero new packages (all already locked as keyhive_core transitives); ruled in-run.
-keyhive_crypto = { git = "https://github.com/inkandswitch/keyhive", rev = "35460ba1" }
+keyhive_crypto = { git = "https://github.com/inkandswitch/keyhive", rev = "2bb83d6" }
 # Frontier F-1 step 7 — the ciphertext type keyhive_core does not re-export;
 # zero new packages (already locked as a keyhive_core transitive at the same rev).
-beekem = { git = "https://github.com/inkandswitch/keyhive", rev = "35460ba1" }
+beekem = { git = "https://github.com/inkandswitch/keyhive", rev = "2bb83d6" }
 future_form = "0.3.1"
 rand = "0.8"
-nonempty = "0.10"
+# Frontier F-3: matches the NonEmpty type keyhive_core takes at 2bb83d6 (generate_doc).
+nonempty = "0.12"
 bincode = "1.3"
 # Run 39 (STOP 1, ruled (a)): seed -> signer for the custodied device seed; zero new packages (already locked at 2.2.0 as a keyhive_crypto transitive). H4 amendment candidate.
 ed25519-dalek = "2.2"

@@ -1,0 +1,31 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.18s
+     Running unittests src/lib.rs (target/debug/deps/lfs_core-1f4dbb5b6c4d41c9)
+
+running 1 test
+test f1_device::tests::f1_step7_core_dry_run ... F-1 step 7: restore ImportFirst · doc DocumentId(0x0fd29ccf823bdcb0… · key update None · pending 0 [] · cgka Some(4) · secret pairs 15 · staged false
+F-1 step 7:   read content 1 (setup): OK (F-1 content 1 (setup))
+F-1 step 7: restore ImportFirst · doc DocumentId(0x0fd29ccf823bdcb0… · key update None · pending 0 [] · cgka Some(5) · secret pairs 23 · staged false
+F-1 step 7:   read content 1 (setup): OK (F-1 content 1 (setup))
+F-1 step 7:   read content 2: OK (F-1 content 2)
+F-1 step 7:   read content 3: OK (F-1 content 3)
+F-1 step 7: restore NoSecrets · doc DocumentId(0x4459770853ff94aa… · key update None · pending 4 ["CgkaOperation (own): ReceiveCgkaOpError(CgkaError(OutOfOrderOperation))", "CgkaOperation (own): ReceiveCgkaOpError(CgkaError(UnexpectedInitialOperation))", "CgkaOperation (own): ReceiveCgkaOpError(UnknownInvitePrekey(0x05dd2729fcc067ab…))", "CgkaOperation (own): ReceiveCgkaOpError(CgkaError(UnexpectedInitialOperation))"] · cgka None · secret pairs 7 · staged false
+F-1 step 7:   read content 1 (setup): FAILED (KeyNotFound)
+F-1 step 7: restore ImportAfter · doc DocumentId(0x24cb64da88b5683f… · key update None · pending 0 [] · cgka Some(4) · secret pairs 15 · staged false
+F-1 step 7:   read content 1 (setup): OK (F-1 content 1 (setup))
+F-1 step 7: restore SkipMemberKeyOps · doc DocumentId(0xafe74d8bc21e8062… · key update None · pending 3 ["CgkaOperation (own): ReceiveCgkaOpError(CgkaError(OutOfOrderOperation))", "CgkaOperation (own): ReceiveCgkaOpError(PendingCgkaAuthorization(DocumentId(0xafe74d8bc21e8062…)))", "Delegated (own): ReceiveStaticMembershipError(UnknownAgent(Identifier(0x3dc63096b657778c…)))"] · cgka Some(2) · secret pairs 15 · staged false
+F-1 step 7:   read content 1 (setup): FAILED (KeyNotFound)
+F-1 step 7: 7e restore ImportFirst · doc DocumentId(0x7c23e35e07c2dd41… · key update None · pending 0 [] · cgka Some(4) · secret pairs 22 · staged false
+F-1 step 7:   read content 1 (setup): OK (F-1 content 1 (setup))
+F-1 step 7: write · doc DocumentId(0x4c7bcbd81db0b81a… · key update Some(false) · pending 0 [] · cgka Some(4) · secret pairs 15 · staged true
+F-1 step 7: 7f (write) restore ImportFirst · doc DocumentId(0x4c7bcbd81db0b81a… · key update None · pending 0 [] · cgka Some(4) · secret pairs 15 · staged false
+F-1 step 7:   read content 1 (setup): OK (F-1 content 1 (setup))
+F-1 step 7:   read content 2: OK (F-1 content 2)
+F-1 step 7: rotate · doc DocumentId(0x809d148e87e56670… · key update Some(true) · pending 0 [] · cgka Some(5) · secret pairs 16 · staged true
+F-1 step 7: write · doc DocumentId(0x809d148e87e56670… · key update Some(false) · pending 0 [] · cgka Some(5) · secret pairs 16 · staged true
+F-1 step 7: 7f (rotate + write) restore ImportFirst · doc DocumentId(0x809d148e87e56670… · key update None · pending 0 [] · cgka Some(5) · secret pairs 15 · staged false
+F-1 step 7:   read content 1 (setup): OK (F-1 content 1 (setup))
+F-1 step 7:   read content 2: FAILED (KeyNotFound)
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 61 filtered out; finished in 0.25s
+

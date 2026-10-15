@@ -1,0 +1,18 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.19s
+     Running unittests src/lib.rs (target/debug/deps/lfs_core-406fead9bae87e8e)
+
+running 1 test
+F-3 xv read: five rows decode and re-encode byte for byte
+F-3 xv read: group 33bcdd2163f4873a Edit
+F-3 xv read: group 5b7b2ec9cf72adf0 Admin (device)
+F-3 xv read: group ddc68230ab1c71ff Read
+F-3 xv read: doc pending 0 []
+F-3 xv read: doc cgka ops Some(5)
+F-3 xv read: doc read content 1 (setup): OK
+F-3 xv read: doc read content 2: OK
+F-3 xv read: doc read content 3: OK
+read rows written by keyhive_core=0.6.0+35460ba1 with keyhive_core=0.6.0+2bb83d6
+test f1_cross_version::f1_read_rows ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 61 filtered out; finished in 0.06s
+

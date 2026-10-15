@@ -1,0 +1,256 @@
+    Updating crates.io index
+    Updating git repository `https://github.com/dsgallups/wasm-tracing`
+     Locking 242 packages to latest compatible versions
+      Adding bincode v1.3.3 (available: v3.0.0)
+      Adding bolero v0.11.1 (available: v0.13.7)
+      Adding chacha20poly1305 v0.10.1 (available: v0.11.0)
+      Adding curve25519-dalek v4.1.3 (available: v5.0.0)
+      Adding derive_more v1.0.0 (available: v2.1.1)
+      Adding ed25519-dalek v2.2.0 (available: v3.0.0)
+      Adding from_js_ref v0.1.3 (available: v0.2.0)
+      Adding generic-array v0.14.7 (available: v0.14.9)
+      Adding getrandom v0.2.17 (available: v0.4.3)
+      Adding js-sys v0.3.105 (available: v0.3.106)
+      Adding minicov v0.3.8 (available: v0.3.9)
+      Adding proptest-derive v0.5.1 (available: v0.9.0)
+      Adding rand v0.8.8 (available: v0.10.3)
+      Adding sha2 v0.10.9 (available: v0.11.1)
+      Adding signature v2.2.0 (available: v3.0.0)
+      Adding thiserror v1.0.69 (available: v2.0.21)
+      Adding toml_datetime v0.6.3 (available: v0.6.11)
+      Adding toml_edit v0.20.2 (available: v0.20.7)
+      Adding wasm-bindgen v0.2.128 (available: v0.2.129)
+      Adding wasm-bindgen-futures v0.4.78 (available: v0.4.79)
+      Adding wasm-bindgen-macro v0.2.128 (available: v0.2.129)
+      Adding wasm-bindgen-macro-support v0.2.128 (available: v0.2.129)
+      Adding wasm-bindgen-shared v0.2.128 (available: v0.2.129)
+      Adding wasm-bindgen-test v0.3.78 (available: v0.3.79)
+      Adding wasm-bindgen-test-macro v0.3.78 (available: v0.3.79)
+      Adding wasm-bindgen-test-shared v0.2.128 (available: v0.2.129)
+      Adding wasm_refgen v0.1.5 (available: v0.2.0)
+      Adding web-sys v0.3.105 (available: v0.3.106)
+      Adding x25519-dalek v2.0.1 (available: v3.0.0)
+ Downloading crates ...
+  Downloaded equivalent v1.0.3
+  Downloaded rand_xorshift v0.5.0
+  Downloaded smallvec v1.16.3
+  Downloaded core_detect v1.0.0
+  Downloaded unicode-ident v1.0.27
+  Downloaded toml_parser v1.1.5+spec-1.1.0
+  Downloaded borsh-derive v1.8.1
+  Downloaded toml_edit v0.25.17+spec-1.1.0
+  Downloaded toml_datetime v1.1.2+spec-1.1.0
+  Downloaded bit-vec v0.10.1
+  Downloaded bit-set v0.11.1
+  Downloaded cc v1.8.0
+  Downloaded proptest v1.12.0
+  Downloaded syn v3.0.9
+  Downloaded zerocopy v0.8.63
+  Downloaded tokio v1.53.3
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.27
+   Compiling libc v0.2.190
+   Compiling cfg-if v1.0.5
+   Compiling version_check v0.9.5
+   Compiling typenum v1.20.1
+   Compiling serde_core v1.0.229
+   Compiling pin-project-lite v0.2.17
+   Compiling serde v1.0.229
+   Compiling once_cell v1.21.4
+   Compiling memchr v2.8.3
+   Compiling futures-core v0.3.34
+   Compiling rustix v1.1.5
+   Compiling bitflags v2.13.2
+   Compiling generic-array v0.14.7
+   Compiling semver v1.0.28
+   Compiling subtle v2.6.1
+   Compiling rand_core v0.10.1
+   Compiling futures-sink v0.3.34
+   Compiling zerocopy v0.8.63
+   Compiling rustc_version v0.4.1
+   Compiling futures-channel v0.3.34
+   Compiling tracing-core v0.1.36
+   Compiling getrandom v0.4.3
+   Compiling curve25519-dalek v4.1.3
+   Compiling slab v0.4.12
+   Compiling futures-task v0.3.34
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.14
+   Compiling futures-io v0.3.34
+   Compiling cc v1.8.0
+   Compiling thiserror v2.0.21
+   Compiling regex-syntax v0.8.11
+   Compiling syn v2.0.119
+   Compiling syn v3.0.9
+   Compiling errno v0.3.14
+   Compiling getrandom v0.2.17
+   Compiling blake3 v1.8.7
+   Compiling rand_core v0.6.4
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling digest v0.10.7
+   Compiling inout v0.1.4
+   Compiling universal-hash v0.5.1
+   Compiling cpufeatures v0.2.17
+   Compiling autocfg v1.5.1
+   Compiling signature v2.2.0
+   Compiling thiserror v1.0.69
+   Compiling opaque-debug v0.3.1
+   Compiling unicode-xid v0.2.6
+   Compiling lazy_static v1.5.1
+   Compiling poly1305 v0.8.0
+   Compiling sha2 v0.10.9
+   Compiling num-traits v0.2.19
+   Compiling aead v0.5.2
+   Compiling dirs-sys-next v0.1.2
+   Compiling arrayvec v0.7.8
+   Compiling constant_time_eq v0.4.2
+   Compiling fastrand v2.5.0
+   Compiling syn v1.0.109
+   Compiling terminal_size v0.4.4
+   Compiling tempfile v3.27.0
+   Compiling dirs-next v2.0.0
+   Compiling regex-automata v0.4.18
+   Compiling wait-timeout v0.2.1
+   Compiling csv-core v0.1.13
+   Compiling quick-error v1.2.3
+   Compiling clap_lex v1.1.1
+   Compiling bit-vec v0.10.1
+   Compiling log v0.4.34
+   Compiling anstyle v1.0.14
+   Compiling itoa v1.0.18
+   Compiling fnv v1.0.7
+   Compiling ryu v1.0.23
+   Compiling rusty-fork v0.3.1
+   Compiling clap_builder v4.6.7
+   Compiling tracing-log v0.2.0
+   Compiling bit-set v0.11.1
+   Compiling csv v1.4.0
+   Compiling term v0.7.0
+   Compiling sharded-slab v0.1.7
+   Compiling rand v0.10.3
+   Compiling ppv-lite86 v0.2.21
+   Compiling matchers v0.2.0
+   Compiling is-terminal v0.4.17
+   Compiling chacha20 v0.10.2
+   Compiling rand_xorshift v0.5.0
+   Compiling rand_chacha v0.3.1
+   Compiling thread_local v1.1.10
+   Compiling smallvec v1.16.3
+   Compiling serde_derive v1.0.229
+   Compiling futures-macro v0.3.34
+   Compiling zeroize_derive v1.5.0
+   Compiling tracing-attributes v0.1.31
+   Compiling thiserror-impl v2.0.21
+   Compiling future_form_macros v0.3.1
+   Compiling zeroize v1.9.1
+   Compiling futures-util v0.3.34
+   Compiling derive_more-impl v1.0.0
+   Compiling cipher v0.4.4
+   Compiling thiserror-impl v1.0.69
+   Compiling chacha20 v0.9.1
+   Compiling tracing v0.1.44
+   Compiling dupe_derive v0.9.1
+   Compiling derive_arbitrary v1.5.0
+   Compiling keyhive_codec v0.1.0 (~/scratch/keyhive-2bb83d6/keyhive_codec)
+   Compiling dupe v0.9.1
+   Compiling chacha20poly1305 v0.10.1
+   Compiling rand v0.8.8
+   Compiling tokio-macros v2.7.2
+   Compiling core_detect v1.0.0
+   Compiling nu-ansi-term v0.50.3
+   Compiling arbitrary v1.5.0
+   Compiling encode_unicode v1.0.0
+   Compiling unicode-width v0.1.14
+   Compiling tokio v1.53.3
+   Compiling unarray v0.1.4
+   Compiling prettytable-rs v0.10.0
+   Compiling tracing-subscriber v0.3.23
+   Compiling proptest v1.12.0
+   Compiling derivative v2.2.0
+   Compiling futures-executor v0.3.34
+   Compiling proptest-derive v0.5.1
+   Compiling divan-macros v0.1.21
+   Compiling ed25519 v2.2.3
+   Compiling futures v0.3.34
+   Compiling future_form v0.3.1
+   Compiling derive_more v1.0.0
+   Compiling bincode v1.3.3
+   Compiling nonempty v0.12.0
+   Compiling x25519-dalek v2.0.1
+   Compiling ed25519-dalek v2.2.0
+   Compiling clap v4.6.7
+   Compiling derive-where v1.7.0
+   Compiling yansi v1.0.1
+   Compiling regex-lite v0.1.9
+   Compiling keyhive_crypto v0.2.1 (~/scratch/keyhive-2bb83d6/keyhive_crypto)
+   Compiling diff v0.1.13
+   Compiling condtype v1.3.0
+   Compiling test-utils v0.0.0-alpha.3 (~/scratch/keyhive-2bb83d6/test-utils)
+   Compiling testresult v0.4.2
+   Compiling pretty_assertions v1.4.1
+   Compiling hex v0.4.3
+   Compiling divan v0.1.21
+   Compiling beekem v0.4.0 (~/scratch/keyhive-2bb83d6/beekem)
+   Compiling tokio-stream v0.1.19
+   Compiling tokio-test v0.4.6
+   Compiling keyhive_core v0.6.0 (~/scratch/keyhive-2bb83d6/keyhive_core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 17.56s
+     Running tests/g5_own_export.rs (target/debug/deps/g5_own_export-5e165be22677de0e)
+
+running 7 tests
+test q1_own_export_carries_the_members_key_event_intro_by_add ... Q1 intro=Add
+  device's own access: Some(Admin)
+  export (14 events): CgkaOperation[device] x4, Delegated x2, PrekeysExpanded[device] x7, PrekeysExpanded[member] x1
+  member key event in export: true
+ok
+test q1_own_export_carries_the_members_key_event_intro_by_card ... Q1 intro=Card
+  device's own access: Some(Admin)
+  export (14 events): CgkaOperation[device] x4, Delegated x2, PrekeyRotated[member] x1, PrekeysExpanded[device] x7
+  member key event in export: true
+ok
+test q2_rebuilt_from_own_export_reads_intro_by_add ... Q2 intro=Add drop_own_key_events=false
+  member key event in export: true
+  replayed (14 events): CgkaOperation[device] x4, Delegated x2, PrekeysExpanded[device] x7, PrekeysExpanded[member] x1
+  pending: 0
+  rebuilt knows the member: true
+  member's access on rebuilt: Some(Edit)
+  read: ok
+ok
+test q2_rebuilt_from_own_export_reads_intro_by_add_own_key_events_dropped ... Q2 intro=Add drop_own_key_events=true
+  member key event in export: true
+  replayed (7 events): CgkaOperation[device] x4, Delegated x2, PrekeysExpanded[member] x1
+  pending: 0
+  rebuilt knows the member: true
+  member's access on rebuilt: Some(Edit)
+  read: ok
+ok
+test q2_rebuilt_from_own_export_reads_intro_by_card ... Q2 intro=Card drop_own_key_events=false
+  member key event in export: true
+  replayed (14 events): CgkaOperation[device] x4, Delegated x2, PrekeyRotated[member] x1, PrekeysExpanded[device] x7
+  pending: 0
+  rebuilt knows the member: true
+  member's access on rebuilt: Some(Edit)
+  read: ok
+ok
+test q2_rebuilt_from_own_export_reads_intro_by_card_own_key_events_dropped ... Q2 intro=Card drop_own_key_events=true
+  member key event in export: true
+  replayed (7 events): CgkaOperation[device] x4, Delegated x2, PrekeyRotated[member] x1
+  pending: 0
+  rebuilt knows the member: true
+  member's access on rebuilt: Some(Edit)
+  read: ok
+ok
+test q3_relay_forwarded_sync_gives_the_member_access ... Q3 relay
+  A -> relay (16 events): CgkaOperation[A] x4, Delegated x3, PrekeyRotated[B] x1, PrekeyRotated[relay] x1, PrekeysExpanded[A] x7
+  pending at relay: 0
+  relay knows B: true; B's access as the relay sees it: Some(Edit)
+  relay -> B (24 events): CgkaOperation[A] x4, Delegated x3, PrekeyRotated[B] x1, PrekeyRotated[relay] x2, PrekeysExpanded[A] x7, PrekeysExpanded[relay] x7
+  pending at B: 0
+  B's own access: Some(Edit)
+  B read: ok
+ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+

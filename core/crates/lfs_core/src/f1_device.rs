@@ -388,8 +388,9 @@ mod tests {
     }
 
     /// Runs 7a–7f through `Core`, a new `Core` on the same file standing in
-    /// for a relaunch. Prints what held and what broke; asserts only the
-    /// working path (7a, 7b).
+    /// for a relaunch. Prints what held and what broke; asserts the working
+    /// path (7a, 7b) and, from F-3 at Keyhive `2bb83d6`, that 7d reads with
+    /// the member key events left out.
     #[test]
     #[ignore]
     fn f1_step7_core_dry_run() {
@@ -429,9 +430,14 @@ mod tests {
         ] {
             let (seed, secrets) = fresh(n);
             let c = Core::new(path(n)).unwrap();
-            match c.f1_restore(seed, Some(secrets), mode) {
-                Ok(r) => show(&r),
+            let r = c.f1_restore(seed, Some(secrets), mode);
+            match &r {
+                Ok(r) => show(r),
                 Err(e) => println!("F-1 step 7: restore {mode:?} FAILED: {e:?}"),
+            }
+            if mode == F1RestoreMode::SkipMemberKeyOps {
+                let r = r.expect("7d restores");
+                assert!(r.pending.is_empty() && r.reads.iter().all(|x| x.ok), "7d: own export carries the contact-card member");
             }
         }
 

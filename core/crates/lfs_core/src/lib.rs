@@ -1082,7 +1082,7 @@ mod tests {
             ]
         );
         assert_eq!(core.pins().split(' ').next().unwrap(), storage::PIN_LABEL_KEYHIVE_CORE);
-        assert!(storage::PIN_LABEL_KEYHIVE_CORE.ends_with("+35460ba1"), "label carries the git rev (Run 37 re-rule)");
+        assert!(storage::PIN_LABEL_KEYHIVE_CORE.ends_with("+2bb83d6"), "label carries the git rev (Run 37 re-rule)");
     }
 
     /// Run 39 — plan §9 row 5 across the exported surface: ceremony, grants,

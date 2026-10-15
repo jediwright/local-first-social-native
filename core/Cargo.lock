@@ -526,15 +526,15 @@ dependencies = [
 [[package]]
 name = "beekem"
 version = "0.4.0"
-source = "git+https://github.com/inkandswitch/keyhive?rev=35460ba1#35460ba125f2358c7ef39deb5f6bbe2b61230582"
+source = "git+https://github.com/inkandswitch/keyhive?rev=2bb83d6#2bb83d696596df7807f2a5adce3312e89f16081e"
 dependencies = [
  "blake3",
  "chacha20poly1305",
  "dupe",
  "ed25519-dalek 2.2.0",
  "future_form",
- "keyhive_crypto 0.2.1 (git+https://github.com/inkandswitch/keyhive?rev=35460ba1)",
- "nonempty 0.10.0",
+ "keyhive_crypto 0.2.1 (git+https://github.com/inkandswitch/keyhive?rev=2bb83d6)",
+ "nonempty 0.12.0",
  "rand 0.8.8",
  "serde",
  "thiserror 1.0.69",
@@ -2559,6 +2559,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "keyhive_codec"
+version = "0.1.0"
+source = "git+https://github.com/inkandswitch/keyhive?rev=2bb83d6#2bb83d696596df7807f2a5adce3312e89f16081e"
+dependencies = [
+ "serde",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "keyhive_core"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2588,7 +2597,7 @@ dependencies = [
 [[package]]
 name = "keyhive_core"
 version = "0.6.0"
-source = "git+https://github.com/inkandswitch/keyhive?rev=35460ba1#35460ba125f2358c7ef39deb5f6bbe2b61230582"
+source = "git+https://github.com/inkandswitch/keyhive?rev=2bb83d6#2bb83d696596df7807f2a5adce3312e89f16081e"
 dependencies = [
  "beekem 0.4.0",
  "bincode",
@@ -2601,8 +2610,8 @@ dependencies = [
  "ed25519-dalek 2.2.0",
  "future_form",
  "futures",
- "keyhive_crypto 0.2.1 (git+https://github.com/inkandswitch/keyhive?rev=35460ba1)",
- "nonempty 0.10.0",
+ "keyhive_crypto 0.2.1 (git+https://github.com/inkandswitch/keyhive?rev=2bb83d6)",
+ "nonempty 0.12.0",
  "rand 0.8.8",
  "serde",
  "signature 2.2.0",
@@ -2636,7 +2645,7 @@ dependencies = [
 [[package]]
 name = "keyhive_crypto"
 version = "0.2.1"
-source = "git+https://github.com/inkandswitch/keyhive?rev=35460ba1#35460ba125f2358c7ef39deb5f6bbe2b61230582"
+source = "git+https://github.com/inkandswitch/keyhive?rev=2bb83d6#2bb83d696596df7807f2a5adce3312e89f16081e"
 dependencies = [
  "bincode",
  "blake3",
@@ -2646,6 +2655,7 @@ dependencies = [
  "ed25519-dalek 2.2.0",
  "future_form",
  "futures",
+ "keyhive_codec",
  "rand 0.8.8",
  "serde",
  "signature 2.2.0",
@@ -2693,8 +2703,8 @@ dependencies = [
  "ed25519-dalek 2.2.0",
  "future_form",
  "keyhive_core 0.6.0",
- "keyhive_crypto 0.2.1 (git+https://github.com/inkandswitch/keyhive?rev=35460ba1)",
- "nonempty 0.10.0",
+ "keyhive_crypto 0.2.1 (git+https://github.com/inkandswitch/keyhive?rev=2bb83d6)",
+ "nonempty 0.12.0",
  "rand 0.8.8",
  "reqwest 0.12.28",
  "rusqlite",
@@ -3186,6 +3196,9 @@ name = "nonempty"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9737e026353e5cd0736f98eddae28665118eb6f6600902a7f50db585621fecb6"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "noq"

@@ -1,0 +1,42 @@
+     Running unittests src/lib.rs (target/debug/deps/keyhive_core-5eb15bc37e6cba6a)
+test result: ok. 88 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+     Running tests/access_control.rs (target/debug/deps/access_control-f67a403c575ad483)
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.76s
+     Running tests/archive.rs (target/debug/deps/archive-c250bfb69a62669c)
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.11s
+     Running tests/causal.rs (target/debug/deps/causal-fbf0bd234fefbf10)
+test result: ok. 8 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.15s
+     Running tests/cgka_authz.rs (target/debug/deps/cgka_authz-f75195e0fbe5cc30)
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+     Running tests/concurrent_instances.rs (target/debug/deps/concurrent_instances-bac1303e103d7e1e)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+     Running tests/content.rs (target/debug/deps/content-391fd6521383e98f)
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+     Running tests/deadlocks.rs (target/debug/deps/deadlocks-62153cfe220e5e52)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/delegations.rs (target/debug/deps/delegations-21e25031f8ab6dab)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/encrypt.rs (target/debug/deps/encrypt-a6bbc7481a40dc25)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+     Running tests/g5_own_export.rs (target/debug/deps/g5_own_export-5e165be22677de0e)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+     Running tests/instances.rs (target/debug/deps/instances-391c54c2c4af9230)
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+     Running tests/membership.rs (target/debug/deps/membership-53fc00f7630e35a9)
+test result: ok. 24 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.67s
+     Running tests/path_validation.rs (target/debug/deps/path_validation-21fa8186e28a451f)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+     Running tests/prekeys.rs (target/debug/deps/prekeys-3bb587e89d8b9cbd)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+     Running tests/public.rs (target/debug/deps/public-8d5e03f3053cc6c6)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+     Running tests/revocation_sync.rs (target/debug/deps/revocation_sync-4b174eb09f910c8d)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/sync.rs (target/debug/deps/sync-b777eb84c63f9f08)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s
+     Running tests/transitive_access.rs (target/debug/deps/transitive_access-808039690f3ce687)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+     Running tests/unintroduced_replica.rs (target/debug/deps/unintroduced_replica-ca417f8c1b8be3e1)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+   Doc-tests keyhive_core
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.33s

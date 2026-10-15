@@ -40,13 +40,15 @@ pub const FORMAT_KEYHIVE_STATIC_EVENTS_V1: &str = "keyhive.static-events.bincode
 /// public event set, including its group-encryption operations. A separate
 /// tag because the `CgkaOperation` shape changed after `90fe4a51`. Public
 /// material only: no seed and no prekey or leaf secret is ever written here.
+/// Rows written at `35460ba1` still read at `2bb83d6` (F-3).
 pub const FORMAT_KEYHIVE_DOC_EVENTS_V1: &str = "keyhive.doc-events.bincode.v1";
 
 /// Frontier (F-1, step 7): `bincode` over `(DocumentId, Vec<(String, [u8; 32],
 /// beekem::encrypted::EncryptedContent<Vec<u8>, [u8; 32]>)>)` at Keyhive
 /// `35460ba1`: a document's id and its stored ciphertexts, each with a label
 /// and content ref. Ciphertext and public ids only; no plaintext, seed or
-/// secret is ever written here.
+/// secret is ever written here. Rows written at `35460ba1` still read at
+/// `2bb83d6` (F-3).
 pub const FORMAT_KEYHIVE_ENCRYPTED_CONTENT_V1: &str = "keyhive.encrypted-content.bincode.v1";
 
 /// Run 36 H1 housekeeping (flagged at Run 30): the Keyhive pin label shown in
@@ -56,7 +58,7 @@ pub const FORMAT_KEYHIVE_ENCRYPTED_CONTENT_V1: &str = "keyhive.encrypted-content
 /// `=0.5.0` and `main@90fe4a51` carry the same version string, 12 commits
 /// apart), so the label now carries both — version + git rev. Shells' pins
 /// footer changes accordingly (predicted in the Run 37 apply guide).
-pub const PIN_LABEL_KEYHIVE_CORE: &str = "keyhive_core=0.6.0+35460ba1";
+pub const PIN_LABEL_KEYHIVE_CORE: &str = "keyhive_core=0.6.0+2bb83d6";
 
 // B3 (Phase 0) — force the pin to link, without creating any Keyhive object.
 // Relocated from lib.rs in Run 36 (H1 housekeeping); unchanged otherwise.
