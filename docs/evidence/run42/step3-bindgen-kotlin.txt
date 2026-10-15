@@ -1,0 +1,17 @@
+[cargo-make] INFO - cargo make 0.37.24
+[cargo-make] INFO - 
+[cargo-make] INFO - Build File: Makefile.toml
+[cargo-make] INFO - Task: bindgen-kotlin
+[cargo-make] INFO - Profile: development
+[cargo-make] INFO - Running Task: android-so
+    Building arm64-v8a (aarch64-linux-android)
+    Finished `release` profile [optimized] target(s) in 0.43s
+    Building x86_64 (x86_64-linux-android)
+    Finished `release` profile [optimized] target(s) in 0.28s
+     Copying libraries to /Users/jediwright/local-first-social-native/bindings/kotlin/jniLibs
+[cargo-make] INFO - Running Task: bindgen-kotlin
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.17s
+     Running `target/debug/uniffi-bindgen generate --library ../bindings/kotlin/jniLibs/arm64-v8a/liblfs_core.so --language kotlin --out-dir ../bindings/kotlin/generated`
+Code generation complete, formatting with ktlint (use --no-format to disable)
+Warning: Unable to auto-format lfs_core.kt using ktlint: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+[cargo-make] INFO - Build Done in 2.36 seconds.

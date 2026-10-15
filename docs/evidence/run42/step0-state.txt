@@ -1,0 +1,10 @@
+Note: sha256 values shortened to their first 16 hex characters for the repository's secret scan; recompute from the commit for the full value.
+## main...origin/main
+c43e100501715fae5ad22bcf2142fb65a0aafafb
+c43e100 2026-10-14 23:55:48 -0400 Docs: CONTRIBUTING and PR template rewritten for this repository
+95457548eced9e30…  core/Cargo.lock
+4c3a97f5c58d4a70…  .github/workflows/guard.yml
+ffa3d3c8183aa832…  .github/CONTRIBUTING.md
+8
+name = "rustls"
+version = "0.23.45"

@@ -1,0 +1,8 @@
+Note: sha256 values shortened to their first 16 hex characters for the repository's secret scan; recompute from the commit for the full value.
+ .github/workflows/guard.yml | 5 ++---
+ core/Cargo.lock             | 8 ++++----
+ 2 files changed, 6 insertions(+), 7 deletions(-)
+ M .github/workflows/guard.yml
+ M core/Cargo.lock
+?? docs/evidence/run42/
+028861781f14907d…  core/Cargo.lock

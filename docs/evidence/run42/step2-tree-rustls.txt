@@ -1,0 +1,12 @@
+rustls v0.23.46
+├── hyper-rustls v0.27.9
+│   └── reqwest v0.12.28
+│       ├── atrium-oauth v0.1.7
+│       │   └── lfs_core v0.0.0 (/Users/jediwright/local-first-social-native/core/crates/lfs_core)
+│       ├── atrium-xrpc-client v0.5.15
+│       │   └── lfs_core v0.0.0 (/Users/jediwright/local-first-social-native/core/crates/lfs_core)
+│       └── lfs_core v0.0.0 (/Users/jediwright/local-first-social-native/core/crates/lfs_core)
+├── reqwest v0.12.28 (*)
+└── tokio-rustls v0.26.5
+    ├── hyper-rustls v0.27.9 (*)
+    └── reqwest v0.12.28 (*)

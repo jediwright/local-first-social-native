@@ -134,15 +134,17 @@ A change touching any of these is **automatically Critical**, whatever its size.
 Enforced by tooling:
 
 - **Secrets scan, CI:** `.github/workflows/guard.yml` runs `gitleaks` over the full history on every push to `main` and `frontier`. The config (`.gitleaks.toml`) adds a rule for bare 32-byte hex seeds, which the default rules miss.
+- **Dependency audit, CI:** the same workflow runs `cargo audit` (cargo-audit 0.22.2) in `core/` on every push to `main` and `frontier`. A vulnerability advisory fails the job. Warnings (unmaintained, unsound, yanked) are allowed and do not fail it, so each one is still looked at and recorded by hand.
+- **Runner image:** on `main`, both jobs run on `ubuntu-24.04` rather than `ubuntu-latest`, which GitHub moves to Ubuntu 26.04 between 2026-10-19 and 2026-11-19. Pinned 2026-10-15. Time-sensitive: review the pin when GitHub announces the deprecation of `ubuntu-24.04`, or on 2027-01-15, whichever comes first. The pin fixes the OS image, not the Rust version: the audit job builds `cargo-audit` with whatever Rust that image carries, which can still change.
 - **Secrets scan, local:** a `gitleaks` pre-commit hook on my machine scans each staged change. Hooks are not versioned; this one is expected on any machine that commits here.
 
 Run by hand before a change lands, with the result recorded in the log entry or the pull request:
 
 - **Core tests:** `cargo make test` (`cargo test -p lfs_core`). All must pass; record the pass, fail and ignored counts.
-- **Dependency audit:** `cargo audit` in `core/` on any dependency change. Every advisory is looked at and recorded.
+- **Dependency audit:** `cargo audit` in `core/` on any dependency change, before the change is committed. CI repeats it after the push; the hand run is the one the record cites. Every advisory is looked at and recorded.
 - **Device builds:** `cargo make android-so`, `bindgen-kotlin` and `swift-xcframework` (see [`BUILDING.md`](../BUILDING.md)), then the run's device checks on the Android emulator and an iPhone for any change that reaches a shell.
 
-Known gaps, each a candidate to move into CI: core tests and `cargo audit` do not run in CI on `main` (the audit runs in CI on `frontier` only). Until they do, they are run by hand and their results are written down. If you find another rule held by memory alone, adding it here is part of your change (see Self-healing conventions below).
+Known gaps, each a candidate to move into CI: core tests do not run in CI on either branch. Until they do, they are run by hand and their results are written down. If you find another rule held by memory alone, adding it here is part of your change (see Self-healing conventions below).
 
 ---
 
@@ -171,4 +173,4 @@ For a live security issue that cannot wait: act first, then record it within **1
 
 ---
 
-*This file is a governed derivative of the Governed PR Framework v0.3 (J. Wright · UX Minds, LLC). Revised 2026-10-14 to match this repository.*
+*This file is a governed derivative of the Governed PR Framework v0.3 (J. Wright · UX Minds, LLC). Revised 2026-10-14 to match this repository; revised 2026-10-15 to record the dependency audit in CI on `main` and the runner-image pin.*

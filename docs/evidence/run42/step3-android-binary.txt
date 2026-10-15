@@ -1,0 +1,2 @@
+-rw-r--r--@ 1 jediwright  staff  47554604 2026-10-15T00:30:07 apps/android/app/build/outputs/apk/debug/app-debug.apk
+  29 rustls-0.23.46

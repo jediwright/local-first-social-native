@@ -1,0 +1,7 @@
+-rwxr-xr-x  1 jediwright  staff  91872 2026-10-15T00:32:22 /Users/jediwright/Library/Developer/Xcode/DerivedData/LfsShell-awmmjrbhchziuucjvrmhdzicqbvh/Build/Products/Debug-iphoneos/LfsShell.app/LfsShell
+com.uxminds.lfs.LfsShell
+-rw-r--r--  1 jediwright  staff  57707216 2026-10-15T00:27:23 bindings/swift/lfs_coreFFI.xcframework/ios-arm64/liblfs_core.a
+  50 rustls-0.23.46
+-rwxr-xr-x  1 jediwright  staff  91872 2026-10-15T00:32:22 /Users/jediwright/Library/Developer/Xcode/DerivedData/LfsShell-awmmjrbhchziuucjvrmhdzicqbvh/Build/Products/Debug-iphoneos/LfsShell.app/LfsShell
+-rwxr-xr-x  1 jediwright  staff  22844048 2026-10-15T00:32:17 /Users/jediwright/Library/Developer/Xcode/DerivedData/LfsShell-awmmjrbhchziuucjvrmhdzicqbvh/Build/Products/Debug-iphoneos/LfsShell.app/LfsShell.debug.dylib
+  46 rustls-0.23.46

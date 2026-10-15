@@ -1,0 +1,35 @@
+# Note: checksums shortened to their first 16 hex characters for the repository's secret scan; the full values are in core/Cargo.lock at this commit.
+diff --git a/core/Cargo.lock b/core/Cargo.lock
+index 041903f..d6c4c33 100644
+--- a/core/Cargo.lock
++++ b/core/Cargo.lock
+@@ -1158,7 +1158,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "c54e03a951783e8b…"
+ dependencies = [
+  "data-encoding",
+- "syn 3.0.6",
++ "syn 1.0.109",
+ ]
+ 
+ [[package]]
+@@ -3772,7 +3772,7 @@ dependencies = [
+  "once_cell",
+  "socket2",
+  "tracing",
+- "windows-sys 0.52.0",
++ "windows-sys 0.61.2",
+ ]
+ 
+ [[package]]
+@@ -4073,9 +4073,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "rustls"
+-version = "0.23.45"
++version = "0.23.46"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "0d41d731c7d2f962…"
++checksum = "48e13bd8c0e9365c…"
+ dependencies = [
+  "log",
+  "once_cell",

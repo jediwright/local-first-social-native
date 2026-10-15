@@ -1,0 +1,19 @@
+data-encoding-macro-internal v0.1.19 (proc-macro)
+└── data-encoding-macro v0.1.21
+    └── multibase v0.9.3
+        ├── atrium-crypto v0.1.3
+        │   └── lfs_core v0.0.0 (/Users/jediwright/local-first-social-native/core/crates/lfs_core)
+        └── cid v0.11.3
+            └── ipld-core v0.4.3
+                ├── atrium-api v0.25.8
+                │   ├── atrium-identity v0.1.9
+                │   │   ├── atrium-oauth v0.1.7
+                │   │   │   └── lfs_core v0.0.0 (/Users/jediwright/local-first-social-native/core/crates/lfs_core)
+                │   │   └── lfs_core v0.0.0 (/Users/jediwright/local-first-social-native/core/crates/lfs_core)
+                │   ├── atrium-oauth v0.1.7 (*)
+                │   ├── atrium-repo v0.1.8
+                │   │   └── lfs_core v0.0.0 (/Users/jediwright/local-first-social-native/core/crates/lfs_core)
+                │   └── lfs_core v0.0.0 (/Users/jediwright/local-first-social-native/core/crates/lfs_core)
+                ├── atrium-repo v0.1.8 (*)
+                └── serde_ipld_dagcbor v0.6.4
+                    └── atrium-repo v0.1.8 (*)
