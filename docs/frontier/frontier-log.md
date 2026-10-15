@@ -8,7 +8,7 @@ Entries are added in order and not rewritten afterward. If a later experiment ch
 
 ```
 exp:          F-<n> — <short name>
-date:         <YYYY-MM-DD, UTC>
+date:         <YYYY-MM-DD, America/New_York>
 base:         frontier@<short hash> · keyhive <pinned rev> (+ local patch patches/<G-n>.patch, if any)
 question:     <one line: what this experiment is trying to find out>
 tried:        <what was built or changed>
@@ -159,4 +159,76 @@ checks:       gitleaks clean (80 commits) · cargo audit clean: no vulnerabiliti
               extended no (no app change) · keyhive version recorded yes (35460ba1; the patch
               applied only in a local Keyhive checkout, not in the app's build) · app IDs
               unchanged yes
+```
+
+```
+exp:          F-3 — Keyhive moved to the G-5 fix
+date:         2026-10-14
+base:         frontier@3fc4f0e · keyhive 35460ba1 → 2bb83d6 (no local patch)
+question:     At 2bb83d6, does the app build, do its stored rows load, and does Keyhive's own
+              export now carry members the device knows only by contact card?
+tried:        1. At 35460ba1, extended the cross-version check. Besides the identity rows, it
+                 now writes and reloads one group row pair with two grants, and the F-1
+                 document rows (events, member key events, stored ciphertexts) after a write,
+                 a key update and a write. The test identities' seeds and secrets it needs to
+                 read them back are kept outside the repository. Wrote the rows, and ran the
+                 step 7 dry run as the baseline.
+              2. Moved keyhive_core, keyhive_crypto and beekem from 35460ba1 to 2bb83d6, the
+                 merge of Keyhive pull request #260, and fixed the build.
+              3. Read the rows written at 35460ba1 with the build at 2bb83d6.
+              4. Ran the full lfs_core suite.
+              5. Reran the step 7 dry run, and made it assert that a restore leaving out the
+                 stored member key events has nothing pending and reads.
+              6. In a Keyhive checkout at 2bb83d6, ran the seven-case G-5 reproduction and
+                 all of keyhive_core's own tests.
+              7. On the Android emulator and the iPhone 17 Pro, installed the new build over
+                 the F-1 install and relaunched, then ran 7a, 7b and 7d from fresh setups.
+              The stored member key events (the G-5 workaround) were kept throughout.
+result:       Held:
+              - The build broke only where expected: Keyhive now takes nonempty 0.12, and the
+                app passed a 0.10 NonEmpty to generate_doc at four sites. Moving the app's
+                direct nonempty to 0.12 fixed it. One package added to the lockfile,
+                keyhive_codec 0.1.0; none removed (step 2).
+              - Rows written at 35460ba1 load at 2bb83d6. The identity rows, the group row
+                pair, and the document's events, member key-event and ciphertext rows all
+                decode and re-encode byte for byte; the group has the same three members at
+                the same levels; the document replays with nothing pending and all three
+                stored contents decrypt (step 3). On both devices, the document F-1 left
+                there reads exactly as it did at 35460ba1, including a read F-1 broke on
+                purpose.
+              - lfs_core: 50 pass, 0 fail, 12 ignored, as at 35460ba1, including the grant
+                and revoke, group reload, recovery and key-safety tests (step 4).
+              - G-5 is fixed for the app. With the stored member key events left out, the
+                device's own export now carries the member it knows only by contact card:
+                the restore has nothing pending and reads, in the core (step 5) and on both
+                devices (7d). At 35460ba1 the same restore left 3 events pending and failed
+                with KeyNotFound (step 1). The other restore modes behave as before.
+              - In Keyhive alone at 2bb83d6, all seven reproduction cases pass, the relay
+                case included. keyhive_core: 275 pass, 0 fail, 3 ignored upstream, not
+                counting the seven. The 3 more than at a691f34 are one new test each from
+                pull requests #250 and #254 and the relay test added on #260 (step 6).
+              Broke: nothing in the app. The first 7d attempt on the Android emulator closed
+              the app before setup while an emulator system service was crash-looping; it was
+              rerun from a clear, and both attempts are kept.
+              Not followed: Keyhive's main moved to 585e6fc (keyhive_core 0.7.0, beekem 0.5.0)
+              on 2026-10-13. Those merges add fields to the group-encryption operations that
+              the document-events row stores, so that row will very likely not decode there.
+              Moving past 2bb83d6 is a separate experiment.
+              Evidence: evidence/F-3/.
+gap:          G-5
+outcome:      promote — the app builds and its stored rows load at 2bb83d6, and Keyhive's own
+              export now carries what the G-5 workaround stores; the workaround stays until a
+              separate experiment removes it
+checks:       gitleaks clean (87 commits) · cargo audit: 4 advisories in rustls 0.23.45
+              (RUSTSEC-2026-0346 to -0349, published 2026-10-14), looked at. The same version
+              is on main and was here before this experiment, reached through reqwest (and
+              iroh/quinn under the optional subduction feature). None applies as built: the
+              app has no custom TLS session store (0346), configures no ECH (0347), doesn't
+              compile the brotli feature (0348), and uses the ring provider, which offers no
+              post-quantum group to lose (0349). Fixed in 0.23.46; to be moved separately, on
+              both branches. Allowed warnings: the 4 from F-1 and F-2, plus yoke-derive 0.8.3
+              yanked, also on main. None from keyhive_codec or nonempty 0.12 ·
+              cold_keys_are_exported_and_never_persisted pass; extended no · keyhive version
+              recorded yes (keyhive_core, keyhive_crypto and beekem at 2bb83d6; no local
+              patch) · app IDs unchanged yes
 ```
