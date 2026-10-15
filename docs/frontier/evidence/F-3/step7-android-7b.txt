@@ -1,0 +1,18 @@
+--------- beginning of main
+10-14 23:06:31.658 12128 12147 I F1      : F-1 launch: no stored document (tap Set up)
+10-14 23:06:40.174 12128 12148 I F1      : setup · doc DocumentId(0xef1dc6d3dc1dfc78… · key update true · pending 0 · cgka 4 · secret pairs 8
+10-14 23:06:40.174 12128 12148 I F1      : secrets saved (wrap key: software); rows committed
+10-14 23:06:50.043 12354 12378 I F1      : F-1 launch: restore ImportFirst · doc DocumentId(0xef1dc6d3dc1dfc78… · key update - · pending 0 · cgka 4 · secret pairs 15
+10-14 23:06:50.043 12354 12378 I F1      :   read content 1 (setup): OK (F-1 content 1 (setup))
+10-14 23:06:50.043 12354 12378 I F1      : wrap key: software
+10-14 23:07:00.498 12354 12378 I F1      : write · doc DocumentId(0xef1dc6d3dc1dfc78… · key update false · pending 0 · cgka 4 · secret pairs 15
+10-14 23:07:00.498 12354 12378 I F1      : secrets saved (wrap key: software); rows committed
+10-14 23:07:06.526 12354 12376 I F1      : rotate · doc DocumentId(0xef1dc6d3dc1dfc78… · key update true · pending 0 · cgka 5 · secret pairs 16
+10-14 23:07:06.526 12354 12376 I F1      : secrets saved (wrap key: software); rows committed
+10-14 23:07:08.088 12354 12378 I F1      : write · doc DocumentId(0xef1dc6d3dc1dfc78… · key update false · pending 0 · cgka 5 · secret pairs 16
+10-14 23:07:08.088 12354 12378 I F1      : secrets saved (wrap key: software); rows committed
+10-14 23:07:18.295 12688 12708 I F1      : F-1 launch: restore ImportFirst · doc DocumentId(0xef1dc6d3dc1dfc78… · key update - · pending 0 · cgka 5 · secret pairs 23
+10-14 23:07:18.295 12688 12708 I F1      :   read content 1 (setup): OK (F-1 content 1 (setup))
+10-14 23:07:18.295 12688 12708 I F1      :   read content 2: OK (F-1 content 2)
+10-14 23:07:18.295 12688 12708 I F1      :   read content 3: OK (F-1 content 3)
+10-14 23:07:18.295 12688 12708 I F1      : wrap key: software

@@ -1,0 +1,6 @@
+# F-3 step 7, oldrows, iPhone 17 Pro (physical)
+# launch 1: new build (2bb83d6) run over the existing F-1 install, restore ImportFirst on launch
+F1 F-1 launch: restore ImportFirst · doc DocumentId(0xea8e8d5d2078cdb6… · key update - · pending 0 · cgka 5 · secret pairs 15
+F1   read content 1 (setup): OK (F-1 content 1 (setup))
+F1   read content 2: OK (F-1 content 2)
+F1 keychain class WhenUnlockedThisDeviceOnly · Secure Enclave present · passcode set · device

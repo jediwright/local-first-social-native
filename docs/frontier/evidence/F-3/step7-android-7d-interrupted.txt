@@ -1,0 +1,2 @@
+--------- beginning of main
+10-14 22:59:51.369  7977  8013 I F1      : F-1 launch: no stored document (tap Set up)

@@ -1,0 +1,9 @@
+# F-3 step 7a, iPhone 17 Pro (physical)
+# launch 1: the oldrows launch (step7-ios-oldrows.txt), then Set up (new doc; app not deleted first, Set up replaces the stored rows)
+# launch 1 lines below transcribed from the app's on-screen status
+F1 setup · doc DocumentId(0x11da2f8200334810… · key update true · pending 0 · cgka 4 · secret pairs 8
+F1 secrets saved (keychain class WhenUnlockedThisDeviceOnly · Secure Enclave present · passcode set · device); rows committed
+# launch 2: kill and relaunch, ImportFirst
+F1 F-1 launch: restore ImportFirst · doc DocumentId(0x11da2f8200334810… · key update - · pending 0 · cgka 4 · secret pairs 15
+F1   read content 1 (setup): OK (F-1 content 1 (setup))
+F1 keychain class WhenUnlockedThisDeviceOnly · Secure Enclave present · passcode set · device

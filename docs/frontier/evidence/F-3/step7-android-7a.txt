@@ -1,0 +1,7 @@
+--------- beginning of main
+10-14 22:58:36.966  7067  7092 I F1      : F-1 launch: no stored document (tap Set up)
+10-14 22:58:49.878  7067  7094 I F1      : setup · doc DocumentId(0xd6075378f8fd630f… · key update true · pending 0 · cgka 4 · secret pairs 8
+10-14 22:58:49.878  7067  7094 I F1      : secrets saved (wrap key: software); rows committed
+10-14 22:58:58.778  7335  7354 I F1      : F-1 launch: restore ImportFirst · doc DocumentId(0xd6075378f8fd630f… · key update - · pending 0 · cgka 4 · secret pairs 15
+10-14 22:58:58.778  7335  7354 I F1      :   read content 1 (setup): OK (F-1 content 1 (setup))
+10-14 22:58:58.778  7335  7354 I F1      : wrap key: software

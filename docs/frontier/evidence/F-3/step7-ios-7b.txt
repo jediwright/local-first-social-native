@@ -1,0 +1,14 @@
+# F-3 step 7b, iPhone 17 Pro (physical)
+# launch 1: continuing from 7a's launch 2 (same doc), then Write, Rotate, Write
+F1 write · doc DocumentId(0x11da2f8200334810… · key update false · pending 0 · cgka 4 · secret pairs 15
+F1 secrets saved (keychain class WhenUnlockedThisDeviceOnly · Secure Enclave present · passcode set · device); rows committed
+F1 rotate · doc DocumentId(0x11da2f8200334810… · key update true · pending 0 · cgka 5 · secret pairs 16
+F1 secrets saved (keychain class WhenUnlockedThisDeviceOnly · Secure Enclave present · passcode set · device); rows committed
+F1 write · doc DocumentId(0x11da2f8200334810… · key update false · pending 0 · cgka 5 · secret pairs 16
+F1 secrets saved (keychain class WhenUnlockedThisDeviceOnly · Secure Enclave present · passcode set · device); rows committed
+# launch 2: kill and relaunch, ImportFirst
+F1 F-1 launch: restore ImportFirst · doc DocumentId(0x11da2f8200334810… · key update - · pending 0 · cgka 5 · secret pairs 23
+F1   read content 1 (setup): OK (F-1 content 1 (setup))
+F1   read content 2: OK (F-1 content 2)
+F1   read content 3: OK (F-1 content 3)
+F1 keychain class WhenUnlockedThisDeviceOnly · Secure Enclave present · passcode set · device

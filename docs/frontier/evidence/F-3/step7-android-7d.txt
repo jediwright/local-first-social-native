@@ -1,0 +1,9 @@
+--------- beginning of main
+10-14 23:03:47.484 10355 10383 I F1      : F-1 launch: no stored document (tap Set up)
+10-14 23:04:08.621 10355 10382 I F1      : setup · doc DocumentId(0xd3a963fc01f9c1a8… · key update true · pending 0 · cgka 4 · secret pairs 8
+10-14 23:04:08.621 10355 10382 I F1      : secrets saved (wrap key: software); rows committed
+10-14 23:04:33.880 10900 10920 I F1      : F-1 launch: restore ImportFirst · doc DocumentId(0xd3a963fc01f9c1a8… · key update - · pending 0 · cgka 4 · secret pairs 15
+10-14 23:04:33.880 10900 10920 I F1      :   read content 1 (setup): OK (F-1 content 1 (setup))
+10-14 23:04:33.880 10900 10920 I F1      : wrap key: software
+10-14 23:05:05.288 10900 10920 I F1      : restore SkipMemberKeyOps · doc DocumentId(0xd3a963fc01f9c1a8… · key update - · pending 0 · cgka 4 · secret pairs 15
+10-14 23:05:05.288 10900 10920 I F1      :   read content 1 (setup): OK (F-1 content 1 (setup))

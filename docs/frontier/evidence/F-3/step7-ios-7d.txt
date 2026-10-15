@@ -1,0 +1,11 @@
+# F-3 step 7d, iPhone 17 Pro (physical)
+# launch 1: app deleted first, fresh install, then Set up
+F1 F-1 launch: no stored document (tap Set up)
+F1 setup · doc DocumentId(0x67d4e25b15e7fd56… · key update true · pending 0 · cgka 4 · secret pairs 8
+F1 secrets saved (keychain class WhenUnlockedThisDeviceOnly · Secure Enclave present · passcode set · device); rows committed
+# launch 2: kill and relaunch (ImportFirst), then Restore SKIP_MEMBER_KEY_OPS
+F1 F-1 launch: restore ImportFirst · doc DocumentId(0x67d4e25b15e7fd56… · key update - · pending 0 · cgka 4 · secret pairs 15
+F1   read content 1 (setup): OK (F-1 content 1 (setup))
+F1 keychain class WhenUnlockedThisDeviceOnly · Secure Enclave present · passcode set · device
+F1 restore SkipMemberKeyOps · doc DocumentId(0x67d4e25b15e7fd56… · key update - · pending 0 · cgka 4 · secret pairs 15
+F1   read content 1 (setup): OK (F-1 content 1 (setup))

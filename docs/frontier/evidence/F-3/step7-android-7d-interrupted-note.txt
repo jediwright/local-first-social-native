@@ -1,0 +1,2 @@
+F-3 step 7, Android: the first 7d attempt closed the app after launch, before Set up (step7-android-7d-interrupted.txt).
+The crash buffer at that time held 28 aborts of the emulator system service android.hardware.uwb-service ("failed to open the serial device"), every 5 s from 22:59:54; none from the app or lfs_core. 7d was restarted from a clear.
