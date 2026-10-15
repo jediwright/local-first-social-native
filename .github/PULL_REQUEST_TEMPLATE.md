@@ -1,126 +1,144 @@
 <!--
-PR Template · keyhive-employment-seam
-Governed derivative of the Governed PR Framework v0.3 (J. Wright)
-Full framework: github.com/jediwright/governed-pr-framework
+Pull request template · local-first-social-native
+Governed derivative of the Governed PR Framework v0.3. Full rules: .github/CONTRIBUTING.md
 
-HOW THIS WORKS
-1. Declare your tier below. 2. Fill only the sections your tier requires. 3. Delete unused sections.
-Tier disputes resolve UPWARD (reviewer's call wins if higher).
-Changes touching a protected surface (see CONTRIBUTING.md) are automatically Critical.
-No pre-cleared classes are declared in this repo yet — all changes tier normally.
-This repo's review scale is S4 (public / maintainer review) — you don't declare it here.
+1. Declare the tier. 2. Fill only the sections that tier needs. 3. Delete the rest.
+Tier disputes resolve upward. Anything on a protected surface (CONTRIBUTING.md) is Critical,
+and every dependency change is Critical.
+This repository's review scale is S1 (solo author with an AI assistant): review happens in a
+separate session from the one that wrote the change.
+Target branch is main. Nothing from the frontier branch is merged into main.
 
-EMERGENCY CHANGES (live incidents, security responses): act first, then open this PR
-retrospectively within 1 business day. Fill it as a Critical-tier PR with honest
-after-the-fact tags. See §10.1 of the framework for the full procedure.
+Emergency (live security issue): act first, then open this as a retrospective Critical PR
+within 1 business day, with honest after-the-fact tags.
 -->
 
-## Change Tier
-<!-- Pick ONE. Tier = how far a failure would spread, not how many lines changed.
-     Low-risk  — failure would be local and visible (rename, constant, test-only change)
-     Feature   — failure could spread within one area (new feature, module refactor)
-     Critical  — failure could be silent or unrecoverable:
-                   • anything in src/types.ts (schema changes propagate everywhere)
-                   • src/gate.ts (GateCheckRecord, assertCapabilityCurrent, confirmRevocation)
-                   • AgentContact / AgentCapabilityGrant / Principle 6 boundary (recordSpeechAuthority)
-                   • revocation state machine (revoked-local / revoked-confirmed prefixes)
-                   • Automerge/Keyhive/Subduction pin versions in package.json
-                   • CONTRIBUTING.md or this template (governance configuration)
-                   • AccessEvent, AccessEventType, ExposureRecord (evidence layer)
-                 Full protected-surface list: CONTRIBUTING.md -->
+## Change tier
+<!-- Pick ONE.
+     Low-risk — failure local and visible: copy, comments, test-only change, shell layout, README.
+     Feature  — failure could spread within one area: new document type, new FFI function
+                (added, not changed), shell screen, module refactor.
+     Critical — failure could be silent or unrecoverable, including:
+                • stored formats, format tags, the SQLite schema (storage.rs)
+                • key custody: ceremony seeds, signer_from_seed, recover_identity,
+                  Keychain / AndroidKeyStore seed handling
+                • consumer policy (policy.rs): delegation floor, grant and revoke bars
+                • identity and group membership (ceremony.rs, groups.rs)
+                • removing or changing an FFI item
+                • any Cargo.toml or Cargo.lock change, including the Keyhive pin
+                • TLS backend or trust roots (resolve.rs, reqwest config)
+                • app identifiers or the Keychain service name
+                • CONTRIBUTING.md, this template, .gitleaks.toml, guard.yml -->
 
 **Tier:** Low-risk / Feature / Critical
 
 ---
 
 ## Intent
-<!-- ALL TIERS. What this changes and why — readable without opening the diff.
-     Example: "Adds seam:gateCheckRecord to access-log entries for agent-class
-     contacts so the log is queryable by agentDID and grantReference per
-     the v0.5 acceptance criteria." -->
+<!-- ALL TIERS. What this changes and why, readable without opening the diff.
+     Example: "Adds a fourth document type, 'notes', behind open_typed_doc so the shells
+     can store a free-text note per profile. New FFI record NotesDoc; no stored format
+     changes for the existing three types." -->
 
 
 
-<!-- ============ LOW-RISK PRs STOP HERE. Everything below is Feature tier and up. ============ -->
+## Checks
+<!-- ALL TIERS. Paste result lines, don't tick boxes. Declare any skipped check and why. -->
 
-## Acceptance Criteria  <!-- Feature + Critical -->
-<!-- Written BEFORE the code. Given / when / then. Point each one at where it's met.
-     Example: "Given an agent contact with a revoked-local capability ref,
-     when assertCapabilityCurrent() runs, then gateResult is 'blocked-revoked'
-     and a GateCheckRecord is emitted → met in gate.ts assertCapabilityCurrent + gate.test.ts" -->
+- `gitleaks` (pre-commit hook; CI on push):
+- `cargo make test` (pass / fail / ignored):
+- `cargo audit` (any dependency change; every advisory looked at):
+- Device checks (any change that reaches a shell; Android emulator / iPhone):
+- Observation-log entry (any change to the core, bindings or a shell): Run
+
+<!-- ============ LOW-RISK STOPS HERE. Below is Feature and Critical. ============ -->
+
+## Acceptance criteria  <!-- Feature + Critical -->
+<!-- Written BEFORE the code. Given / when / then, each pointing at where it is met.
+     Example: "Given a store holding rows written before this change, when the core
+     reopens it, then every row decodes under its existing tag and the profile reloads
+     unchanged → met in storage.rs tests + device relaunch check." -->
 
 - [ ] Given … when … then … → met in: …
 - [ ] Given … when … then … → met in: …
 
-## Verification Status  <!-- Feature + Critical -->
-<!-- Tag each substantive claim. The tags:
-     Confirmed      — verified; say against WHAT (test run, package version) and when
+## Verification status  <!-- Feature + Critical -->
+<!-- Tag every substantive claim.
+     Confirmed      — verified; say against WHAT (test run, device run, pinned version) and when
      Inferred       — follows from something confirmed; state the reasoning
-     Unverified     — assumed; MUST include a closure plan (what you'll watch, by when).
-                      Not allowed on protected surfaces (K4).
+     Unverified     — assumed; MUST include a closure plan (what you'll check, by when).
+                      Not allowed on a protected surface.
      Time-sensitive — true now; name what will make it expire
-
-     Note: Confirmed tags against the Automerge/Keyhive pinned stack are
-     Time-sensitive — the pins are frozen pre-releases. Name the version set
-     the claim was confirmed against. -->
+     Claims confirmed against the pinned Keyhive version are Time-sensitive: name the rev. -->
 
 | Claim | Tag | Evidence / reasoning / closure plan |
 |---|---|---|
 |  |  |  |
 
 ## Not in this PR
-<!-- One line. What you deliberately left out, and why leaving it out is safe. -->
+<!-- One line: what you left out on purpose, and why that is safe. -->
 
 **Not in this PR:** … — **safe to defer because:** …
 
 ## Pre-mortem  <!-- Feature + Critical -->
-<!-- Answer in writing: "It's two weeks from now and this PR caused an incident.
-     What was it?"
-     For gate or schema changes: consider specifically — did this widen what
-     an agent-class contact can do? Did it silently change what the gate records
-     vs. what the access log stores? Did it affect the two-state revocation
-     machine in a way that could produce a false 'pass'? -->
+<!-- "It's two weeks from now and this change caused an incident. What was it?"
+     For storage or key changes, consider specifically: could a row written before this
+     change fail to load after it? Could a seed or secret now reach the database, a log
+     or a screenshot? Could a grant or revoke now pass a check it should fail? -->
 
 
 
-<!-- ============ FEATURE PRs STOP HERE. Everything below is Critical tier only. ============ -->
+<!-- ============ FEATURE STOPS HERE. Below is Critical only. ============ -->
 
-## Convention Check  <!-- Critical -->
-<!-- Link the governing document for any schema, key format, protocol, or type convention touched.
-     If the convention doc does not exist yet: writing it is part of this PR.
-     For changes to types.ts, gate.ts, or the agent-class model: the governing spec is
-     pattern-commons-07-employment-seam-v0-5_2026-08-08.md — link the relevant section. -->
+## Convention check  <!-- Critical -->
+<!-- Link the document that governs any stored format, key format, protocol or type convention
+     touched: the format-tag comments in storage.rs, the consumer evidence note, the upstream
+     Keyhive / Automerge / AT Protocol source. If none exists yet, writing it is part of this PR. -->
 
-- Convention doc(s):
-- New/updated doc included in this PR (if a gap was found):
+- Governing document(s):
+- New or updated document in this PR (if a gap was found):
 
-## Decision Record  <!-- Critical — only if this PR settles a question that would fail silently if wrong -->
-<!-- Link a short record: context / decision / alternatives considered / consequences.
-     Ordinary implementation choices that a visible later refactor could reverse don't need one.
-     Changes to the revocation-state machine, the Principle 6 type boundary, or the
-     gate/evidence separation almost always need one. -->
+## Upstream check  <!-- Critical -->
+<!-- At this scale the upstream project is the second reviewer for boundary claims.
+     What was checked against Keyhive, Automerge, AT Protocol or platform documentation,
+     at which version or commit, and what it showed. -->
 
-- Decision record link:
+- Checked against:
+- Result:
 
-## Boundary Questions  <!-- Critical — protected surfaces only -->
-<!-- Does this change what any party can SEE, FORGE, REPLAY, or DENY?
+## Dependency changes  <!-- Critical, any Cargo.toml or Cargo.lock change -->
+<!-- List every lockfile change: packages added, removed, versions moved, and any existing
+     entries re-linked. Paste the cargo audit summary. If the Keyhive rev moves, show that rows
+     written at the old rev still load at the new one, and update PIN_LABEL_KEYHIVE_CORE. -->
+
+- Lockfile changes:
+- `cargo audit`:
+- Stored rows from the previous pin (if the Keyhive rev moved):
+
+## Decision record  <!-- Critical, only if this settles a question that would fail silently if wrong -->
+<!-- Context / decision / alternatives / consequences. A new format tag, a change to what is
+     persisted, or a change to the policy bars almost always needs one. -->
+
+- Decision record:
+
+## Boundary questions  <!-- Critical, protected surfaces only -->
+<!-- Does this change what any party can SEE, FORGE, REPLAY or DENY?
      "No change" is a fine answer. A blank is not.
-     For agent-class model changes: also answer — does this widen what an
-     AgentContact can do? Does it narrow or remove a Principle 6 constraint? -->
+     For key custody: can any seed or secret now be read, copied or persisted where it couldn't
+     before? For policy: can anyone below the bar now grant or revoke? -->
 
 - See:
 - Forge:
 - Replay:
 - Deny:
 
-## Deletion Justification  <!-- Critical — only if code is removed -->
-<!-- Why did the removed code exist? If the answer is "nobody knows," that's a
-     documentation gap to log under §7 of the framework — not permission to delete. -->
+## Deletion justification  <!-- Critical, only if code is removed -->
+<!-- Why did the removed code exist? "Nobody knows" is a documentation gap to record,
+     not permission to delete. -->
 
 
 
-## Verification Chain  <!-- Critical — bug fixes only -->
-<!-- "Fixed the bug" is not evidence. Show the trail. -->
+## Verification chain  <!-- Critical, bug fixes only -->
 
 - Symptom (precise):
 - Root cause (confirmed, not guessed):
@@ -128,22 +146,15 @@ after-the-fact tags. See §10.1 of the framework for the full procedure.
 
 ---
 
-## Review  <!-- completed by the reviewer, not the author -->
+## Review  <!-- completed in a separate session from the one that wrote the change -->
 
-- **Tier declaration matches the diff:** <!-- yes | disputed → resolves upward -->
-- **Reviewed outside the authoring context via:** <!-- maintainer review | separate session vs. spec (solo) -->
-- **Automated checks (lint, tsc, npm test — all 33+ tests green):** <!-- green | bypass declared above with reason -->
+- **Tier matches the diff:** <!-- yes | disputed → resolves upward -->
+- **Reviewed outside the authoring session, against:** <!-- the plan and its acceptance criteria -->
+- **Checks green (not attested):** <!-- yes | skipped check declared above with reason -->
 - **No Unverified tags on protected surfaces:** <!-- confirmed | n/a -->
-
-**Reviewer scope** <!-- required on Feature+ at this scale -->
-- Approved (what I evaluated):
-- Not evaluated (outside my domain):
-
-**Block note** <!-- anyone may block any PR; overriding a block requires written justification here -->
 
 ---
 <!-- Before merging:
-     · Rebased across a package.json change? Confirmed tags on stack-dependent claims are stale — re-verify.
-     · PR open past 14 days? Re-verify Confirmed tags; don't just rebase.
-     · Agent-class changes: confirm recordSpeechAuthority?: never is untouched on AgentContact,
-       or that any change to it has passed the full Principle 6 boundary-questions block above. -->
+     · Rebased across a Cargo.lock change? Confirmed tags that depend on the stack are stale; re-verify.
+     · Open more than 14 days? Re-verify Confirmed tags rather than just rebasing.
+     · Storage or key change: cold_keys_are_exported_and_never_persisted extended, never loosened. -->

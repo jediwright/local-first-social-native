@@ -1,145 +1,174 @@
-# Contributing to keyhive-employment-seam
+# Contributing to local-first-social-native
 
-This repository follows the [Governed PR Framework v0.3](https://github.com/jediwright/governed-pr-framework) (J. Wright).
-This file is a governed derivative of that framework. Inheritance rules: §8 of `FRAMEWORK.md`.
+This repository follows the [Governed PR Framework v0.3](https://github.com/jediwright/governed-pr-framework). This file is a governed derivative of that framework; inheritance rules are in §8 of its `FRAMEWORK.md`. You can submit a correct change from this file and the pull request template alone.
 
 ---
 
 ## What this repository is
 
-`keyhive-employment-seam` is a local-first prototype implementing the Employment Seam pattern — worker-side governance of AI access at the employment boundary. The core claim: a worker should be able to grant, revoke, and verify AI agent capabilities against a local-first data store without surrendering custody of their own work record.
+A small native iOS and Android app with a shared Rust core, for a local-first social network (working name). The core (`core/crates/lfs_core`) holds Automerge documents, SQLite storage, a Keyhive identity and group membership, and a UniFFI surface. The shells (`apps/ios`, `apps/android`) render it and hold the device's keys in platform storage.
 
-Governing specification: `pattern-commons-07-employment-seam-v0-5_2026-08-08.md`  
-Build plan: `keyhive-employment-seam-build-plan-v0-5_2026-08-08.md`  
-Vocabulary: `UFO_Lexicon_v1_2_2026-08-08.md`
+Two branches, with different rules:
+
+- **`main`** is the tested app. Everything in this file applies to it.
+- **`frontier`** is for experiments. It has its own rules in [`docs/frontier/CHARTER.md`](../docs/frontier/CHARTER.md), and **nothing from it is ever merged into `main`.** Work that proves out there comes back as a fresh build on `main`, written from `main`'s current head and citing the experiment (`F-n`) and any gap (`G-n`) it relies on.
 
 ---
 
 ## Review scale
 
-This repository operates at **S1 — Solo + AI assistant** (§3 of the framework). There is one author; PRs are reviewed by the author in a separate session or context from the one that produced the code, against the written spec and acceptance criteria.
+This repository operates at **S1: solo author with an AI assistant** (framework §3). I am the only author. A change is reviewed in a separate session from the one that produced it, against the written plan and its acceptance criteria. That is how K2 (reviewed outside the authoring context) is met here.
 
-For Critical changes on protected surfaces, the compensating mechanism is external verification — checking the design claim against the Automerge/Keyhive ecosystem or the governing spec before merge. The ecosystem is the second reviewer of record for boundary-layer claims at this scale.
+A fresh session is independent in context but not in kind. For Critical changes, the compensating check is external: the design claim is checked against the upstream project concerned (Keyhive, Automerge, AT Protocol, the platform documentation) before the change lands. For anything network-facing, at least one check involves a party outside the local environment before the phase closes.
+
+Outside contributions are welcome as pull requests. They are reviewed the same way, by me, in a separate session.
 
 ---
 
-## Change tiers — the short version
+## How a build lands on `main`
 
-Tier is determined by **how far a failure would spread**, not by line count.
+Most work on `main` lands as a numbered **build run**, committed directly by me, not as a pull request:
 
-| Tier | When to use it |
-|---|---|
-| **Low-risk** | Failure would be local and visible: a rename, a constant, a test-only change, copy. |
-| **Feature** | Failure could spread within one bounded area: a new feature, a module refactor, a behavior change in one component. |
-| **Critical** | Failure could be silent or unrecoverable. See the protected surfaces list below. |
+1. **Plan first.** A run starts from a written plan with acceptance criteria. Design plans live off-repo; the observation log and the evidence notes are the public record.
+2. **Step by step.** Each step's expected file changes are written down before it is applied, then compared with what actually changed, and read back before the next step.
+3. **Stop on a dependency change.** Any change to `core/Cargo.toml`, `core/crates/*/Cargo.toml` or `core/Cargo.lock` stops the build until it has been looked at and ruled on, with the lockfile diff listed in the log.
+4. **The Keyhive version is held fixed** within a run. Moving it is its own Critical change.
+5. **Generated bindings change by addition only.** Removing or changing an exported item is a Critical change.
+6. **One observation-log entry per run.** Every build that changes the core, the bindings or a shell gets an entry in [`docs/phase0-observation-log.md`](../docs/phase0-observation-log.md): toolchain, pins, outcome, defects. The log is append-only.
 
-**Tier disputes resolve upward** — if author and reviewer disagree (including across sessions), the higher tier applies.
+Commit messages follow the existing history: `Run N: <what changed>` for a build run, `Log: Run N` for its log entry, `Docs: …` for documentation and `Chore: …` for tooling. A pull request, when one is used, carries the same information in the template.
+
+---
+
+## Four requirements on every change
+
+These apply to every change, whatever its tier (framework §1):
+
+- **K1, tier declared honestly.** The change states its tier. The reviewer's first check is whether that tier matches the diff.
+- **K2, reviewed outside the authoring context.** Review in the session that wrote the change is proofreading, not review (see Review scale above).
+- **K3, automated checks green, not attested.** Every check in the mechanized layer below passes. A check that is skipped is declared, with the reason.
+- **K4, no `Unverified` claim on a protected surface.** See Verification tags below.
+
+---
+
+## Change tiers
+
+Tier is set by **how far a failure would spread**, not by line count.
+
+| Tier | Use it when | Examples here |
+|---|---|---|
+| **Low-risk** | Failure would be local and visible. | Copy, a comment, a test-only change, a shell layout tweak, README edits. |
+| **Feature** | Failure could spread within one area. | A new document type, a new FFI function (added, not changed), a shell screen, a module refactor. |
+| **Critical** | Failure could be silent or unrecoverable, or the change touches a protected surface below. | Anything in the protected surfaces list, including every dependency change. |
+
+**Tier disputes resolve upward.** If the author's tier and the reviewer's tier differ, including across two sessions, the higher one applies.
 
 ---
 
 ## Protected surfaces
 
-Changes touching any of the following are **automatically Critical**, regardless of diff size. K4 applies: no `Unverified` tags on protected-surface claims.
+A change touching any of these is **automatically Critical**, whatever its size. K4 applies: no claim about a protected surface may carry an `Unverified` tag.
 
-**Schema and data conventions**
+**Stored formats and the storage adapter**
 
-- `src/types.ts` — the full schema declaration file. Any addition, removal, or modification of an exported type is a Critical change. This file governs the entire document model; errors propagate through every tab, every test, and every future import of the document.
-- `src/rootDoc.ts` — root document structure and initialization. Changes here affect every document created by every installation.
-- Any new file that declares or exports types consumed by the Automerge document (present or future).
+- `core/crates/lfs_core/src/storage.rs`: the `DocStore` trait, the SQLite schema and its migration, and the format-tag constants (`automerge.save.v1`, `keyhive.static-delegations.bincode.v1`, `keyhive.static-events.bincode.v1`).
+- Every persisted byte reaches SQLite through this one adapter, which stamps the tag. A tag names what the bytes are. A new shape gets a new tag value, and existing rows are never re-tagged.
+- Anything that changes which rows are written or what they hold: `identity`, `identity-keyops`, and the group pair `group:<id>` / `group:<id>.keyops`.
 
-**Sync and replication semantics**
+**Key custody**
 
-- Automerge merge logic and document-head handling: anything that changes what state gets replicated, in what order, or what a peer can observe after a sync.
-- The degraded-sync path (`src/degradedSync.test.ts` exercises this): changes to how the prototype behaves when the relay is unreachable or a peer is unresponsive.
-- `BroadcastChannel` configuration and the `syncServer: 'none'` fallback path.
+- The identity ceremony (`ceremony.rs`): the cold admin and recovery seeds and the device seed are returned once across the FFI boundary and never persisted.
+- The single seed-to-signer constructor (`signer_from_seed` in `groups.rs`) and recovery from the cold key (`recover_identity`).
+- Seed custody in the shells: the Keychain items on iOS (`ContentView.swift`, service `social.localfirst.shell`) and the AndroidKeyStore-wrapped seed on Android (`MainActivity.kt`, alias `lfs-device-seed-wrap`).
+- The test `cold_keys_are_exported_and_never_persisted` is only ever extended. If a change alters what gets stored, the test grows to cover it. It is never loosened or skipped.
 
-**Gate and capability semantics — the core governance layer**
+**Consumer policy**
 
-- `src/gate.ts` — `assertCapabilityCurrent()` and `confirmRevocation()`. These are the prototype's primary governance claims. Changes affect what the gate permits, blocks, or records as evidence.
-- `GateCheckRecord` structure in `src/types.ts`: any field addition, removal, or type change on `GateCheckRecord`, `GateResult`, or `RevocationConfirmationState`. The gate-check record is a first-class evidence artifact per PC#7 v0.5; its structure is cited by the governing spec.
-- The two-state revocation model (`revoked-local` / `revoked-confirmed` prefixes on `keyhiveCapabilityRef`): any change to the state machine, the prefix strings, or the transition conditions.
+- `policy.rs`: the two-delegation floor, the "at least Admin to grant" bar and the revoke bar. These are this app's own policy, checked before Keyhive is called.
+- `RootingLevel` arrives as configuration from the shells and is never a constant in the core.
 
-**Agent-class participant model — Principle 6 boundary**
+**Identity and group membership**
 
-- `AgentContact`, `AgentCapabilityGrant`, and the `recordSpeechAuthority?: never` constraint in `src/types.ts`. These implement "Agents are governed parties, never authors of record" (Principle 6, PC#7 v0.5) as a type-system constraint. Any change that widens agent authority — including adding optional fields that could carry record-speech semantics — is Critical and requires explicit Principle 6 boundary questions answered.
-- `seam:identityClass: 'Agent'` controlled-vocabulary value: changes to the string or its placement.
-- Class C chain-of-authority: `authorizationVCReference` field and its required/optional status on `AgentCapabilityGrant`.
+- `ceremony.rs` and `groups.rs`: who is delegated what at the ceremony, how groups persist and reload, how the identity document co-parents groups, and how recovery migrates them.
 
-**Access log and evidence layer**
+**The FFI surface**
 
-- `AccessEvent` and `AccessEventType` in `src/types.ts`: additions or removals that change what the log records, what can be queried, or what a downstream reader can reconstruct from the log.
-- `ExposureRecord` structure: this is the worker-side evidence artifact for the exposure surface at revocation time; its shape is cited by the build plan.
+- Every `#[uniffi::export]` function and every UniFFI record and enum. Adding is Feature tier; removing or changing one is Critical. Generated bindings are not committed.
 
 **Dependency versions**
 
-- Any change to the pinned Automerge/Keyhive/Subduction stack in `package.json` or `package-lock.json`. These packages are frozen pre-releases; a version change is a Critical change requiring a boundary-questions answer and a rationale for departing from the pin.
+- Any change to a manifest or the lockfile is Critical and stops the build (see above). Record the lockfile diff and the `cargo audit` result.
+- The pinned stack, held fixed between deliberate moves (read from `core/crates/lfs_core/Cargo.toml` at `24c31a0`):
 
-  Current pins (read from `package.json` at `c2a11ab`):
-
-  | Package | Version |
+  | Dependency | Pin |
   |---|---|
-  | `@automerge/automerge-repo` | `2.6.0-subduction.40` |
-  | `@automerge/automerge-repo-keyhive` | `0.4.0-alpha.sub.4` |
-  | `@jtfmumm/patchwork-standalone-frame` | `0.7.0` |
+  | `keyhive_core`, `keyhive_crypto` | git `inkandswitch/keyhive` rev `90fe4a51` |
+  | `automerge` / `samod` / `autosurgeon` | `0.12` / `0.14` / `0.14` |
+  | `subduction_keyhive`, `subduction_iroh` | git `inkandswitch/subduction` rev `21b2e6b8`, optional, off by default |
+  | `uniffi` | `0.32` |
+
+- `PIN_LABEL_KEYHIVE_CORE` in `storage.rs` must name the same Keyhive version and rev.
+
+**Network and TLS**
+
+- `resolve.rs` and the `reqwest` configuration: rustls with webpki roots, not the OS trust store. This is a recorded choice; changing the TLS backend or the trust roots is Critical.
+
+**App identity**
+
+- Android `applicationId` `social.localfirst.shell`, the iOS bundle identifier `com.uxminds.lfs.LfsShell` and the Keychain service name. Changing any of them orphans stored data and custodied seeds. The `frontier` branch uses its own `.frontier` identifiers so its builds can never touch this app's data.
 
 **Governance configuration**
 
-- This file (`CONTRIBUTING.md`) — declaring, widening, or modifying any pre-cleared class or protected surface is itself a Critical change (§2.3 of the framework).
-- `.github/PULL_REQUEST_TEMPLATE.md` — changes to the PR template are Critical changes to the governance instrument.
+- This file, `.github/PULL_REQUEST_TEMPLATE.md`, `.gitleaks.toml` and `.github/workflows/guard.yml`. Declaring, widening or changing a protected surface or a pre-cleared class is itself Critical (framework §2.3).
 
 ---
 
 ## Pre-cleared change classes
 
-**None declared yet.** Pre-cleared classes are created by a Critical-tier PR that declares the class, its machine-checkable boundary predicate, and its mandatory expiry/review interval (§2.3 of the framework). No class exists in this repository at adoption; instances will follow as CI gates are instrumented.
-
-When a class is declared, it will appear here with: the class name, its exact boundary (which files may be touched, which semver band is permitted, what CI predicate verifies membership), and the review interval.
+**None declared.** A class is created only by a Critical change that declares it, its machine-checkable boundary and its review interval (framework §2.3).
 
 ---
 
-## The mechanized layer (§6 gates)
+## The mechanized layer
 
-The following are enforced by tooling, not by reviewer memory:
+Enforced by tooling:
 
-- **Lint and type checks** — `npm run lint` / TypeScript compiler; must pass before merge.
-- **Test suite** — `npm test` (Vitest); all 42 tests must be green. The suite covers gate behavior (`gate.test.ts`), degraded-sync behavior (`degradedSync.test.ts`), and the Phase 2 exposure record (`phase2ExposureRecord.test.ts`). A PR that breaks any of these is blocked regardless of tier.
-- **Structured commit format** — `fix:` / `feat:` / `refactor:` / `chore:` + scope. Enforced by commit hook (to be added; manual discipline until then). Makes history parseable and intention-legible.
-- **Diff-size advisory** — PRs exceeding 400 changed lines receive a comment requiring either a split or a written justification. Line count is not the tier definition; it is the signal that something may be mis-tiered.
+- **Secrets scan, CI:** `.github/workflows/guard.yml` runs `gitleaks` over the full history on every push to `main` and `frontier`. The config (`.gitleaks.toml`) adds a rule for bare 32-byte hex seeds, which the default rules miss.
+- **Secrets scan, local:** a `gitleaks` pre-commit hook on my machine scans each staged change. Hooks are not versioned; this one is expected on any machine that commits here.
 
-Any rule currently enforced by memory is a candidate for the mechanized layer. If you find one, the §7 self-healing rule applies: surfacing it is part of your PR.
+Run by hand before a change lands, with the result recorded in the log entry or the pull request:
 
----
+- **Core tests:** `cargo make test` (`cargo test -p lfs_core`). All must pass; record the pass, fail and ignored counts.
+- **Dependency audit:** `cargo audit` in `core/` on any dependency change. Every advisory is looked at and recorded.
+- **Device builds:** `cargo make android-so`, `bindgen-kotlin` and `swift-xcframework` (see [`BUILDING.md`](../BUILDING.md)), then the run's device checks on the Android emulator and an iPhone for any change that reaches a shell.
 
-## What K2 (independent review) means at S1
-
-K2 is satisfied by a review pass in a **separate session or context** from the one that produced the code, conducted against the written spec and acceptance criteria — not the diff alone.
-
-For AI-assisted review: a review conducted in the same conversation that wrote the code is not independent. A fresh context given only the spec and the acceptance criteria (not the authoring conversation) can satisfy K2 at this scale. For Critical changes on protected surfaces, external verification against the upstream ecosystem or governing spec is the compensating control. See §3 (S1) and §6.1 of the framework for the full account.
+Known gaps, each a candidate to move into CI: core tests and `cargo audit` do not run in CI on `main` (the audit runs in CI on `frontier` only). Until they do, they are run by hand and their results are written down. If you find another rule held by memory alone, adding it here is part of your change (see Self-healing conventions below).
 
 ---
 
-## Self-healing conventions (§7)
+## Verification tags
 
-If your PR surfaces something undocumented — a convention not written down, a failure mode not on any list, a protected surface not declared above, a dependency quirk not recorded — **updating this file (or the relevant governing document) is part of your PR**. Code and documentation ship together. This is universal at Critical tier; it is the only mechanism that keeps this file accurate over time.
+Every substantive claim in a log entry or pull request is tagged:
+
+- **Confirmed:** verified. Say against what (a test run, a device run, a pinned version) and when.
+- **Inferred:** follows from something confirmed. State the reasoning.
+- **Unverified:** assumed. Must carry a closure plan: what will be checked, and by when. Not allowed on a protected surface.
+- **Time-sensitive:** true now. Name what will make it expire.
+
+A claim confirmed against the pinned Keyhive version is time-sensitive: it holds for that version only. Name the version.
+
+---
+
+## Self-healing conventions (framework §7)
+
+If a change surfaces something undocumented (a convention, a failure mode, a protected surface not listed above, a dependency quirk), updating this file or the relevant document is part of the same change. Code and documentation ship together.
 
 ---
 
 ## Emergency changes
 
-Live incident, security response, something that cannot wait? **Act first.** Apply the fix. Then open a PR retrospectively within **1 business day** and fill it as a Critical-tier PR with honest after-the-fact tags. The emergency path moves the governance sequence; it does not remove the governance. `Confirmed` still means verified; `Unverified` still requires a closure plan.
-
-See §10.1 of the framework for the full procedure.
+For a live security issue that cannot wait: act first, then record it within **1 business day** as a Critical change with honest after-the-fact tags, in the observation log or a retrospective pull request. The emergency path moves the order of the steps; it does not remove any of them. See framework §10.1.
 
 ---
 
-## Attribution
-
-This file is a governed derivative of the **Governed PR Framework v0.3** (J. Wright · UX Minds, LLC).  
-Framework repo: `github.com/jediwright/governed-pr-framework`
-
-Derivative-local content (protected surfaces, dependency pins, repository-specific gates) does not flow upstream. Improvements worth proposing upstream go through the parent's change-control process.
-
----
-
-*`CONTRIBUTING.md` — keyhive-employment-seam — Governed PR Framework v0.3 derivative*  
-*Adopted August 8, 2026. Register: CONTEXTUAL. Delivery-not-application: apply locally, commit.*
+*This file is a governed derivative of the Governed PR Framework v0.3 (J. Wright · UX Minds, LLC). Revised 2026-10-14 to match this repository.*
